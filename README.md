@@ -84,7 +84,6 @@ This is normal.
 
 ---
 
-```markdown
 ## Download
 
 Download the latest compiled version from the GitHub Releases page.
