@@ -84,12 +84,9 @@ This is normal.
 
 ---
 
+```markdown
 ## Download
 
 Download the latest compiled version from the GitHub Releases page.
 
-```markdown
-The recommended download is:
-
-```text
-DisplayDeck.exe
+The recommended download is **DisplayDeck.exe**.
