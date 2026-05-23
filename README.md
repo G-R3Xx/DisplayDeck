@@ -4,6 +4,10 @@ DisplayDeck is a Windows desktop utility for switching between a normal desk mon
 
 It is designed for people who keep multiple monitors connected to their PC and also want to use a TV in another room for couch gaming, streaming, or full-screen launcher use.
 
+## Screenshot
+
+![DisplayDeck main window](docs/images/displaydeck-main.png)
+
 DisplayDeck can:
 
 - Detect active displays connected to Windows
