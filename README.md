@@ -86,6 +86,6 @@ This is normal.
 
 ## Download
 
-Download the latest compiled version from the GitHub Releases page.
+Download the latest compiled version from the [latest DisplayDeck release](https://github.com/G-R3Xx/DisplayDeck/releases/latest).
 
 The recommended download is **DisplayDeck.exe**.
