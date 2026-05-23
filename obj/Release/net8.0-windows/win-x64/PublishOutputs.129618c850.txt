@@ -1,2 +1,0 @@
-C:\Users\Glen\Documents\GitHub\DisplayDeck\bin\Release\net8.0-windows\win-x64\publish\DisplayDeck.pdb
-C:\Users\Glen\Documents\GitHub\DisplayDeck\bin\Release\net8.0-windows\win-x64\publish\DisplayDeck.exe
