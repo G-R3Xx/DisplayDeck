@@ -1,0 +1,43 @@
+# Build output
+bin/
+obj/
+publish/
+*.exe
+*.dll
+*.pdb
+*.deps.json
+*.runtimeconfig.json
+
+# Visual Studio / Rider / VS Code
+.vs/
+.idea/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# NuGet
+*.nupkg
+packages/
+.nuget/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.old
+
+# Local settings
+*.local
+.env
+.env.*

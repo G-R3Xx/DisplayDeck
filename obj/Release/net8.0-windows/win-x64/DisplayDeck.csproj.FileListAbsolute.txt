@@ -479,3 +479,4 @@ C:\Users\Glen\Documents\GitHub\DisplayDeck\obj\Release\net8.0-windows\win-x64\re
 C:\Users\Glen\Documents\GitHub\DisplayDeck\obj\Release\net8.0-windows\win-x64\DisplayDeck.pdb
 C:\Users\Glen\Documents\GitHub\DisplayDeck\obj\Release\net8.0-windows\win-x64\DisplayDeck.genruntimeconfig.cache
 C:\Users\Glen\Documents\GitHub\DisplayDeck\obj\Release\net8.0-windows\win-x64\ref\DisplayDeck.dll
+C:\Users\Glen\Documents\GitHub\DisplayDeck\obj\Release\net8.0-windows\win-x64\DisplayDeck.sourcelink.json

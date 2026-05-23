@@ -87,4 +87,8 @@ Download the latest compiled version from the GitHub Releases page.
 The recommended download is:
 
 ```text
+<<<<<<< HEAD
 DisplayDeck.exe
+=======
+DisplayDeck.exe
+>>>>>>> 36dcaad (Initial public release of DisplayDeck)
