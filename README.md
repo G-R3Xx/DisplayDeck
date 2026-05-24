@@ -169,3 +169,98 @@ When enabled, DisplayDeck adds itself to the current user's Windows startup regi
 
 ```text
 HKCU\Software\Microsoft\Windows\CurrentVersion\Run
+```
+
+This only affects the current Windows user.
+
+---
+
+## System requirements
+
+- Windows 10 or Windows 11
+- x64 Windows PC
+- .NET 8 runtime if running a framework-dependent build
+- No separate runtime required if using the self-contained release build
+
+---
+
+## Download
+
+Download the latest compiled version from the [latest DisplayDeck release](https://github.com/G-R3Xx/DisplayDeck/releases/latest).
+
+The recommended download is **DisplayDeck.exe**.
+
+---
+
+## Building from source
+
+Install the .NET 8 SDK.
+
+From the project folder:
+
+```powershell
+dotnet restore
+dotnet build
+dotnet run
+```
+
+To create a standalone Windows executable:
+
+```powershell
+dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true
+```
+
+The published app will be created here:
+
+```text
+bin\Release\net8.0-windows\win-x64\publish\DisplayDeck.exe
+```
+
+---
+
+## Known limitations
+
+DisplayDeck relies on Windows display APIs.
+
+Because of this:
+
+- A display must be visible to Windows before it can be enabled.
+- A disconnected HDMI TV usually cannot be activated until Windows detects it again.
+- Some TVs may disappear from Windows when powered off or on the wrong HDMI input.
+- Some applications may not close cleanly if they run elevated or use custom full-screen windows.
+- Display switching can take a few seconds.
+
+---
+
+## Project status
+
+DisplayDeck is currently an early public release.
+
+Current features include:
+
+- Multiple custom display profiles
+- Native Windows display switching
+- Active display detection
+- Per-profile hotkeys
+- Per-profile launcher actions
+- System tray switching
+- Start with Windows
+- Friendly display names on profile cards
+- One primary display per profile
+
+Future improvements may include:
+
+- Profile import/export
+- Optional controller shortcut support
+- Per-profile audio switching
+- Installer package
+- Improved profile icons
+- Advanced display arrangement editing
+
+---
+
+## License
+
+DisplayDeck is released under the MIT License.
+
+See [LICENSE](LICENSE) for details.
