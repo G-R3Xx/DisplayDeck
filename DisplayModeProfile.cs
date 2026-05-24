@@ -35,6 +35,10 @@ public sealed class DisplayModeProfile
 
     public bool CloseLauncherAfterSwitch { get; set; } = false;
 
+    public string PrimaryDisplayLabel { get; set; } = "";
+
+    public string EnabledDisplaysLabel { get; set; } = "";
+
     public string HotkeyDisplay
     {
         get
@@ -111,6 +115,20 @@ public sealed class DisplayModeProfile
         else if (!string.IsNullOrWhiteSpace(LauncherPath))
         {
             LauncherProcessName = Path.GetFileNameWithoutExtension(LauncherPath);
+        }
+
+        if (string.IsNullOrWhiteSpace(PrimaryDisplayLabel))
+        {
+            PrimaryDisplayLabel = string.IsNullOrWhiteSpace(PrimaryDisplayName)
+                ? "Not set"
+                : PrimaryDisplayName;
+        }
+
+        if (string.IsNullOrWhiteSpace(EnabledDisplaysLabel))
+        {
+            EnabledDisplaysLabel = EnabledDisplays.Count == 0
+                ? "None"
+                : string.Join(", ", EnabledDisplays);
         }
     }
 }

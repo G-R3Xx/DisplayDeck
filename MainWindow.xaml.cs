@@ -233,25 +233,78 @@ public partial class MainWindow : Window
         StartWithWindowsCheckBox.IsChecked = _settings.StartWithWindows;
     }
 
-    private void LoadProfilesIntoUi()
+    private void UpdateProfileDisplayLabels()
+{
+    foreach (DisplayModeProfile profile in _settings.Profiles)
     {
-        ProfilesListBox.ItemsSource = null;
-        ProfilesListBox.ItemsSource = _settings.Profiles;
+        profile.PrimaryDisplayLabel = GetFriendlyDisplayName(profile.PrimaryDisplayName);
 
-        DisplayModeProfile? selectedProfile = GetSelectedProfileFromSettings();
-
-        if (selectedProfile is not null)
+        if (profile.EnabledDisplays.Count == 0)
         {
-            ProfilesListBox.SelectedItem = selectedProfile;
+            profile.EnabledDisplaysLabel = "None";
         }
-        else if (_settings.Profiles.Count > 0)
+        else
         {
-            ProfilesListBox.SelectedIndex = 0;
+            profile.EnabledDisplaysLabel = string.Join(
+                ", ",
+                profile.EnabledDisplays.Select(GetFriendlyDisplayName)
+            );
         }
-
-        LoadSelectedProfileIntoEditor();
-        UpdateSelectedProfileHeader();
     }
+}
+
+private string GetFriendlyDisplayName(string displayName)
+{
+    if (string.IsNullOrWhiteSpace(displayName))
+    {
+        return "Not set";
+    }
+
+    DisplayInfo? display = _detectedDisplays.FirstOrDefault(item =>
+        string.Equals(item.DisplayName, displayName, StringComparison.OrdinalIgnoreCase)
+    );
+
+    if (display is null)
+    {
+        return displayName;
+    }
+
+    if (!string.IsNullOrWhiteSpace(display.MonitorName) &&
+        !display.MonitorName.Contains("Generic", StringComparison.OrdinalIgnoreCase) &&
+        !display.MonitorName.Contains("PnP", StringComparison.OrdinalIgnoreCase))
+    {
+        return display.MonitorName;
+    }
+
+    if (!string.IsNullOrWhiteSpace(display.DisplayName))
+    {
+        return display.DisplayName;
+    }
+
+    return displayName;
+}
+
+private void LoadProfilesIntoUi()
+{
+    UpdateProfileDisplayLabels();
+
+    ProfilesListBox.ItemsSource = null;
+    ProfilesListBox.ItemsSource = _settings.Profiles;
+
+    DisplayModeProfile? selectedProfile = GetSelectedProfileFromSettings();
+
+    if (selectedProfile is not null)
+    {
+        ProfilesListBox.SelectedItem = selectedProfile;
+    }
+    else if (_settings.Profiles.Count > 0)
+    {
+        ProfilesListBox.SelectedIndex = 0;
+    }
+
+    LoadSelectedProfileIntoEditor();
+    UpdateSelectedProfileHeader();
+}
 
     private DisplayModeProfile? GetSelectedProfileFromSettings()
     {
@@ -376,7 +429,10 @@ public partial class MainWindow : Window
                 BuildProfileDisplaySelections(profile);
             }
 
-            SetStatus($"Detected {_detectedDisplays.Count} active display(s).");
+            UpdateProfileDisplayLabels();
+ProfilesListBox.Items.Refresh();
+
+SetStatus($"Detected {_detectedDisplays.Count} active display(s).");
         }
         catch (Exception ex)
         {
@@ -606,8 +662,9 @@ public partial class MainWindow : Window
         RegisterConfiguredHotkeys();
         RefreshTrayMenu();
 
-        ProfilesListBox.Items.Refresh();
-        UpdateSelectedProfileHeader();
+        UpdateProfileDisplayLabels();
+ProfilesListBox.Items.Refresh();
+UpdateSelectedProfileHeader();
 
         if (showSavedStatus)
         {

@@ -259,11 +259,17 @@
                                                FontWeight="Bold"
                                                TextWrapping="Wrap"/>
 
-                                    <TextBlock Text="{Binding PrimaryDisplayName, StringFormat=Primary: {0}}"
-                                               Foreground="{StaticResource TextMuted}"
-                                               FontSize="12"
-                                               TextWrapping="Wrap"
-                                               Margin="0,7,0,0"/>
+<TextBlock Text="{Binding PrimaryDisplayLabel, StringFormat=Primary: {0}}"
+           Foreground="{StaticResource TextMuted}"
+           FontSize="12"
+           TextWrapping="Wrap"
+           Margin="0,7,0,0"/>
+
+<TextBlock Text="{Binding EnabledDisplaysLabel, StringFormat=Enabled: {0}}"
+           Foreground="{StaticResource TextSecondary}"
+           FontSize="12"
+           TextWrapping="Wrap"
+           Margin="0,5,0,0"/>
 
                                     <Border Background="#FFFFFF"
                                             BorderBrush="#CBD5E1"
