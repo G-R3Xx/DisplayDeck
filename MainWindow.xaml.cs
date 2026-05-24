@@ -34,6 +34,7 @@ public partial class MainWindow : Window
 
     private List<DisplayInfo> _detectedDisplays = new();
     private List<ProfileDisplaySelection> _profileDisplaySelections = new();
+    private List<DisplayAliasEditorItem> _displayAliasEditorItems = new();
 
     private HwndSource? _hwndSource;
     private Forms.NotifyIcon? _trayIcon;
@@ -233,78 +234,443 @@ public partial class MainWindow : Window
         StartWithWindowsCheckBox.IsChecked = _settings.StartWithWindows;
     }
 
+    private static string GetDisplayKey(DisplayInfo display)
+    {
+        return display.IdentityKey;
+    }
+
+    private static bool DisplayMatchesKey(DisplayInfo display, string displayKey)
+    {
+        if (string.IsNullOrWhiteSpace(displayKey))
+        {
+            return false;
+        }
+
+        return string.Equals(display.IdentityKey, displayKey, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(display.StableDisplayId, displayKey, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(display.MonitorHardwareCode, displayKey, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(display.DisplayName, displayKey, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private DisplayInfo? FindDetectedDisplayByKey(string displayKey)
+    {
+        return _detectedDisplays.FirstOrDefault(display => DisplayMatchesKey(display, displayKey));
+    }
+
+    private void NormalizeDisplayLabels()
+    {
+        _settings.DisplayAliases ??= new Dictionary<string, string>();
+
+        foreach (DisplayInfo display in _detectedDisplays)
+        {
+            string displayKey = GetDisplayKey(display);
+
+            if (string.IsNullOrWhiteSpace(displayKey))
+            {
+                continue;
+            }
+
+            if (_settings.DisplayAliases.TryGetValue(displayKey, out string? savedAlias) &&
+                !string.IsNullOrWhiteSpace(savedAlias))
+            {
+                display.FriendlyName = savedAlias;
+                continue;
+            }
+
+            string detectedName = display.BestDetectedName;
+
+            if (!string.IsNullOrWhiteSpace(detectedName))
+            {
+                display.FriendlyName = detectedName;
+                _settings.DisplayAliases[displayKey] = detectedName;
+                continue;
+            }
+
+            string fallback = string.IsNullOrWhiteSpace(display.DisplayNumber)
+                ? display.DisplayName
+                : $"{display.DisplayNumber} — {display.ResolutionDisplayText}";
+
+            display.FriendlyName = fallback;
+            _settings.DisplayAliases[displayKey] = fallback;
+        }
+
+        _settings.Save();
+    }
+
+    private void SaveDisplayDetailsFromActiveDisplays()
+    {
+        _settings.DisplayDetails ??= new Dictionary<string, SavedDisplayDetails>();
+        _settings.DisplayAliases ??= new Dictionary<string, string>();
+
+        foreach (DisplayInfo display in _detectedDisplays)
+        {
+            string displayKey = GetDisplayKey(display);
+
+            if (string.IsNullOrWhiteSpace(displayKey))
+            {
+                continue;
+            }
+
+            string label = display.DisplayLabel;
+
+            if (string.IsNullOrWhiteSpace(label))
+            {
+                label = display.DisplayName;
+            }
+
+            var details = new SavedDisplayDetails
+            {
+                DisplayName = display.DisplayName,
+                StableDisplayId = display.StableDisplayId,
+                MonitorHardwareCode = display.MonitorHardwareCode,
+                Label = label,
+                ResolutionText = display.ResolutionDisplayText,
+                PositionText = display.PositionText,
+                PositionX = display.PositionX,
+                PositionY = display.PositionY,
+                Width = display.Width,
+                Height = display.Height,
+                Frequency = display.Frequency
+            };
+
+            _settings.DisplayDetails[displayKey] = details;
+            _settings.DisplayAliases[displayKey] = label;
+        }
+
+        _settings.Save();
+    }
+
+    private SavedDisplayDetails? GetSavedDisplayDetails(string displayKey)
+    {
+        if (string.IsNullOrWhiteSpace(displayKey))
+        {
+            return null;
+        }
+
+        if (_settings.DisplayDetails is not null &&
+            _settings.DisplayDetails.TryGetValue(displayKey, out SavedDisplayDetails? details))
+        {
+            return details;
+        }
+
+        return null;
+    }
+
+    private void BuildDisplayAliasEditorItems()
+    {
+        _settings.DisplayAliases ??= new Dictionary<string, string>();
+
+        _displayAliasEditorItems = _detectedDisplays
+            .Select(display =>
+            {
+                string displayKey = GetDisplayKey(display);
+                string detectedName = display.BestDetectedName;
+
+                if (string.IsNullOrWhiteSpace(detectedName))
+                {
+                    detectedName = display.AutoFallbackLabel;
+                }
+
+                string alias = "";
+
+                if (_settings.DisplayAliases.TryGetValue(displayKey, out string? savedAlias))
+                {
+                    alias = savedAlias;
+                }
+
+                if (string.IsNullOrWhiteSpace(alias))
+                {
+                    alias = display.DisplayLabel;
+                }
+
+                return new DisplayAliasEditorItem
+                {
+                    DisplayKey = displayKey,
+                    DisplayName = display.DisplayName,
+                    StableDisplayId = display.StableDisplayId,
+                    DetectedName = detectedName,
+                    ResolutionText = display.ResolutionDisplayText,
+                    PositionText = display.PositionText,
+                    Alias = alias
+                };
+            })
+            .ToList();
+
+        DisplayAliasesItemsControl.ItemsSource = null;
+        DisplayAliasesItemsControl.ItemsSource = _displayAliasEditorItems;
+    }
+
+    private void SaveDisplayNamesButton_Click(object sender, RoutedEventArgs e)
+    {
+        _settings.DisplayAliases ??= new Dictionary<string, string>();
+
+        foreach (DisplayAliasEditorItem item in _displayAliasEditorItems)
+        {
+            if (string.IsNullOrWhiteSpace(item.DisplayKey))
+            {
+                continue;
+            }
+
+            string alias = item.Alias.Trim();
+
+            if (string.IsNullOrWhiteSpace(alias))
+            {
+                DisplayInfo? display = FindDetectedDisplayByKey(item.DisplayKey);
+                alias = display?.AutoFallbackLabel ?? item.DisplayName;
+            }
+
+            _settings.DisplayAliases[item.DisplayKey] = alias;
+
+            if (_settings.DisplayDetails is not null &&
+                _settings.DisplayDetails.TryGetValue(item.DisplayKey, out SavedDisplayDetails? details))
+            {
+                details.Label = alias;
+            }
+        }
+
+        ApplyAliasesToDetectedDisplays();
+        SaveDisplayDetailsFromActiveDisplays();
+        UpdateAllProfileSavedDisplayLabelsFromAliases();
+
+        _settings.Save();
+
+        BuildDisplayAliasEditorItems();
+
+        DisplaysDataGrid.Items.Refresh();
+
+        DisplayModeProfile? profile = GetSelectedProfile();
+
+        if (profile is not null)
+        {
+            BuildProfileDisplaySelections(profile);
+        }
+
+        UpdateProfileDisplayLabels();
+        ProfilesListBox.Items.Refresh();
+        UpdateSelectedProfileHeader();
+
+        SetStatus("Display names saved.");
+    }
+
+    private void ResetDisplayNamesButton_Click(object sender, RoutedEventArgs e)
+    {
+        MessageBoxResult result = System.Windows.MessageBox.Show(
+            "Reset display names for currently active displays back to detected/default names?",
+            "Reset Display Names",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question
+        );
+
+        if (result != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        _settings.DisplayAliases ??= new Dictionary<string, string>();
+
+        foreach (DisplayInfo display in _detectedDisplays)
+        {
+            string displayKey = GetDisplayKey(display);
+
+            if (string.IsNullOrWhiteSpace(displayKey))
+            {
+                continue;
+            }
+
+            _settings.DisplayAliases.Remove(displayKey);
+
+            string detectedName = display.BestDetectedName;
+
+            display.FriendlyName = !string.IsNullOrWhiteSpace(detectedName)
+                ? detectedName
+                : display.AutoFallbackLabel;
+        }
+
+        NormalizeDisplayLabels();
+        SaveDisplayDetailsFromActiveDisplays();
+        UpdateAllProfileSavedDisplayLabelsFromAliases();
+
+        _settings.Save();
+
+        BuildDisplayAliasEditorItems();
+
+        DisplaysDataGrid.Items.Refresh();
+
+        DisplayModeProfile? profile = GetSelectedProfile();
+
+        if (profile is not null)
+        {
+            BuildProfileDisplaySelections(profile);
+        }
+
+        UpdateProfileDisplayLabels();
+        ProfilesListBox.Items.Refresh();
+        UpdateSelectedProfileHeader();
+
+        SetStatus("Display names reset for active displays.");
+    }
+
+    private void ApplyAliasesToDetectedDisplays()
+    {
+        _settings.DisplayAliases ??= new Dictionary<string, string>();
+
+        foreach (DisplayInfo display in _detectedDisplays)
+        {
+            string displayKey = GetDisplayKey(display);
+
+            if (string.IsNullOrWhiteSpace(displayKey))
+            {
+                continue;
+            }
+
+            if (_settings.DisplayAliases.TryGetValue(displayKey, out string? alias) &&
+                !string.IsNullOrWhiteSpace(alias))
+            {
+                display.FriendlyName = alias;
+            }
+        }
+    }
+
+    private void RefreshSavedDisplayLabelsFromActiveDisplays()
+    {
+        bool changed = false;
+
+        _settings.DisplayAliases ??= new Dictionary<string, string>();
+
+        foreach (DisplayModeProfile profile in _settings.Profiles)
+        {
+            profile.SavedDisplayLabels ??= new Dictionary<string, string>();
+
+            foreach (DisplayInfo display in _detectedDisplays)
+            {
+                string displayKey = GetDisplayKey(display);
+
+                if (string.IsNullOrWhiteSpace(displayKey))
+                {
+                    continue;
+                }
+
+                string label = display.DisplayLabel;
+
+                if (string.IsNullOrWhiteSpace(label))
+                {
+                    label = display.DisplayName;
+                }
+
+                if (!profile.SavedDisplayLabels.TryGetValue(displayKey, out string? existingProfileLabel) ||
+                    !string.Equals(existingProfileLabel, label, StringComparison.Ordinal))
+                {
+                    profile.SavedDisplayLabels[displayKey] = label;
+                    changed = true;
+                }
+
+                if (!_settings.DisplayAliases.TryGetValue(displayKey, out string? existingAlias) ||
+                    !string.Equals(existingAlias, label, StringComparison.Ordinal))
+                {
+                    _settings.DisplayAliases[displayKey] = label;
+                    changed = true;
+                }
+            }
+        }
+
+        if (changed)
+        {
+            _settings.Save();
+        }
+    }
+
+    private void UpdateAllProfileSavedDisplayLabelsFromAliases()
+    {
+        _settings.DisplayAliases ??= new Dictionary<string, string>();
+
+        foreach (DisplayModeProfile profile in _settings.Profiles)
+        {
+            profile.SavedDisplayLabels ??= new Dictionary<string, string>();
+
+            foreach (KeyValuePair<string, string> alias in _settings.DisplayAliases)
+            {
+                if (string.IsNullOrWhiteSpace(alias.Key) || string.IsNullOrWhiteSpace(alias.Value))
+                {
+                    continue;
+                }
+
+                profile.SavedDisplayLabels[alias.Key] = alias.Value;
+            }
+        }
+    }
+
     private void UpdateProfileDisplayLabels()
-{
-    foreach (DisplayModeProfile profile in _settings.Profiles)
     {
-        profile.PrimaryDisplayLabel = GetFriendlyDisplayName(profile.PrimaryDisplayName);
-
-        if (profile.EnabledDisplays.Count == 0)
+        foreach (DisplayModeProfile profile in _settings.Profiles)
         {
-            profile.EnabledDisplaysLabel = "None";
+            profile.PrimaryDisplayLabel = GetFriendlyDisplayNameForProfile(profile, profile.PrimaryDisplayName);
+
+            if (profile.EnabledDisplays.Count == 0)
+            {
+                profile.EnabledDisplaysLabel = "None";
+            }
+            else
+            {
+                profile.EnabledDisplaysLabel = string.Join(
+                    ", ",
+                    profile.EnabledDisplays.Select(displayKey => GetFriendlyDisplayNameForProfile(profile, displayKey))
+                );
+            }
         }
-        else
+    }
+
+    private string GetFriendlyDisplayNameForProfile(DisplayModeProfile profile, string displayKey)
+    {
+        if (string.IsNullOrWhiteSpace(displayKey))
         {
-            profile.EnabledDisplaysLabel = string.Join(
-                ", ",
-                profile.EnabledDisplays.Select(GetFriendlyDisplayName)
-            );
+            return "Not set";
         }
-    }
-}
 
-private string GetFriendlyDisplayName(string displayName)
-{
-    if (string.IsNullOrWhiteSpace(displayName))
+        if (_settings.DisplayAliases is not null &&
+            _settings.DisplayAliases.TryGetValue(displayKey, out string? alias) &&
+            !string.IsNullOrWhiteSpace(alias))
+        {
+            return alias;
+        }
+
+        DisplayInfo? activeDisplay = FindDetectedDisplayByKey(displayKey);
+
+        if (activeDisplay is not null)
+        {
+            return activeDisplay.DisplayLabel;
+        }
+
+        SavedDisplayDetails? savedDetails = GetSavedDisplayDetails(displayKey);
+
+        if (savedDetails is not null && !string.IsNullOrWhiteSpace(savedDetails.Label))
+        {
+            return savedDetails.Label;
+        }
+
+        return profile.GetSavedOrRawDisplayLabel(displayKey);
+    }
+
+    private void LoadProfilesIntoUi()
     {
-        return "Not set";
+        UpdateProfileDisplayLabels();
+
+        ProfilesListBox.ItemsSource = null;
+        ProfilesListBox.ItemsSource = _settings.Profiles;
+
+        DisplayModeProfile? selectedProfile = GetSelectedProfileFromSettings();
+
+        if (selectedProfile is not null)
+        {
+            ProfilesListBox.SelectedItem = selectedProfile;
+        }
+        else if (_settings.Profiles.Count > 0)
+        {
+            ProfilesListBox.SelectedIndex = 0;
+        }
+
+        LoadSelectedProfileIntoEditor();
+        UpdateSelectedProfileHeader();
     }
-
-    DisplayInfo? display = _detectedDisplays.FirstOrDefault(item =>
-        string.Equals(item.DisplayName, displayName, StringComparison.OrdinalIgnoreCase)
-    );
-
-    if (display is null)
-    {
-        return displayName;
-    }
-
-    if (!string.IsNullOrWhiteSpace(display.MonitorName) &&
-        !display.MonitorName.Contains("Generic", StringComparison.OrdinalIgnoreCase) &&
-        !display.MonitorName.Contains("PnP", StringComparison.OrdinalIgnoreCase))
-    {
-        return display.MonitorName;
-    }
-
-    if (!string.IsNullOrWhiteSpace(display.DisplayName))
-    {
-        return display.DisplayName;
-    }
-
-    return displayName;
-}
-
-private void LoadProfilesIntoUi()
-{
-    UpdateProfileDisplayLabels();
-
-    ProfilesListBox.ItemsSource = null;
-    ProfilesListBox.ItemsSource = _settings.Profiles;
-
-    DisplayModeProfile? selectedProfile = GetSelectedProfileFromSettings();
-
-    if (selectedProfile is not null)
-    {
-        ProfilesListBox.SelectedItem = selectedProfile;
-    }
-    else if (_settings.Profiles.Count > 0)
-    {
-        ProfilesListBox.SelectedIndex = 0;
-    }
-
-    LoadSelectedProfileIntoEditor();
-    UpdateSelectedProfileHeader();
-}
 
     private DisplayModeProfile? GetSelectedProfileFromSettings()
     {
@@ -394,19 +760,84 @@ private void LoadProfilesIntoUi()
 
     private void BuildProfileDisplaySelections(DisplayModeProfile profile)
     {
-        _profileDisplaySelections = _detectedDisplays
-            .Select(display => new ProfileDisplaySelection
+        List<string> displayKeys = new();
+
+        foreach (DisplayInfo display in _detectedDisplays)
+        {
+            AddDisplayKeyIfMissing(displayKeys, GetDisplayKey(display));
+        }
+
+        AddDisplayKeyIfMissing(displayKeys, profile.PrimaryDisplayName);
+
+        foreach (string displayKey in profile.EnabledDisplays)
+        {
+            AddDisplayKeyIfMissing(displayKeys, displayKey);
+        }
+
+        foreach (string displayKey in profile.DisabledDisplays)
+        {
+            AddDisplayKeyIfMissing(displayKeys, displayKey);
+        }
+
+        _profileDisplaySelections = displayKeys
+            .Select(displayKey =>
             {
-                DisplayName = display.DisplayName,
-                MonitorName = display.MonitorName,
-                ResolutionText = display.ResolutionText,
-                Enabled = profile.EnabledDisplays.Contains(display.DisplayName),
-                Primary = string.Equals(profile.PrimaryDisplayName, display.DisplayName, StringComparison.OrdinalIgnoreCase)
+                DisplayInfo? activeDisplay = FindDetectedDisplayByKey(displayKey);
+                SavedDisplayDetails? savedDetails = GetSavedDisplayDetails(displayKey);
+
+                string label = activeDisplay is not null
+                    ? activeDisplay.DisplayLabel
+                    : GetFriendlyDisplayNameForProfile(profile, displayKey);
+
+                string displayName = activeDisplay is not null
+                    ? activeDisplay.DisplayName
+                    : savedDetails?.DisplayName ?? displayKey;
+
+                string resolutionText = activeDisplay is not null
+                    ? activeDisplay.ResolutionDisplayText
+                    : savedDetails?.ResolutionText ?? "Resolution saved when display is active";
+
+                string positionText = activeDisplay is not null
+                    ? activeDisplay.PositionText
+                    : savedDetails?.PositionText ?? "Not currently active";
+
+                string activeStateText = activeDisplay is not null
+                    ? "Currently active"
+                    : "Not currently active";
+
+                return new ProfileDisplaySelection
+                {
+                    DisplayKey = displayKey,
+                    DisplayName = displayName,
+                    MonitorName = label,
+                    ResolutionText = resolutionText,
+                    PositionText = positionText,
+                    ActiveStateText = activeStateText,
+                    Enabled = profile.EnabledDisplays.Contains(displayKey, StringComparer.OrdinalIgnoreCase),
+                    Primary = string.Equals(profile.PrimaryDisplayName, displayKey, StringComparison.OrdinalIgnoreCase)
+                };
             })
             .ToList();
 
         ProfileDisplaysItemsControl.ItemsSource = null;
         ProfileDisplaysItemsControl.ItemsSource = _profileDisplaySelections;
+    }
+
+    private static void AddDisplayKeyIfMissing(List<string> displayKeys, string displayKey)
+    {
+        if (string.IsNullOrWhiteSpace(displayKey))
+        {
+            return;
+        }
+
+        bool alreadyExists = displayKeys.Any(existing =>
+            string.Equals(existing, displayKey, StringComparison.OrdinalIgnoreCase)
+        );
+
+        if (!alreadyExists)
+        {
+            displayKeys.Add(displayKey);
+        }
     }
 
     private void LoadDetectedDisplays()
@@ -419,6 +850,12 @@ private void LoadProfilesIntoUi()
                 .Where(display => display.IsActive)
                 .ToList();
 
+            NormalizeDisplayLabels();
+            ApplyAliasesToDetectedDisplays();
+            SaveDisplayDetailsFromActiveDisplays();
+            RefreshSavedDisplayLabelsFromActiveDisplays();
+            BuildDisplayAliasEditorItems();
+
             DisplaysDataGrid.ItemsSource = null;
             DisplaysDataGrid.ItemsSource = _detectedDisplays;
 
@@ -430,9 +867,9 @@ private void LoadProfilesIntoUi()
             }
 
             UpdateProfileDisplayLabels();
-ProfilesListBox.Items.Refresh();
+            ProfilesListBox.Items.Refresh();
 
-SetStatus($"Detected {_detectedDisplays.Count} active display(s).");
+            SetStatus($"Detected {_detectedDisplays.Count} active display(s).");
         }
         catch (Exception ex)
         {
@@ -457,14 +894,31 @@ SetStatus($"Detected {_detectedDisplays.Count} active display(s).");
 
         if (_detectedDisplays.Count > 0)
         {
-            string firstDisplay = _detectedDisplays[0].DisplayName;
+            DisplayInfo firstDisplay = _detectedDisplays[0];
+            string firstDisplayKey = GetDisplayKey(firstDisplay);
 
-            profile.PrimaryDisplayName = firstDisplay;
-            profile.EnabledDisplays = new List<string> { firstDisplay };
+            profile.PrimaryDisplayName = firstDisplayKey;
+            profile.EnabledDisplays = new List<string> { firstDisplayKey };
             profile.DisabledDisplays = _detectedDisplays
                 .Skip(1)
-                .Select(display => display.DisplayName)
+                .Select(GetDisplayKey)
+                .Where(displayKey => !string.IsNullOrWhiteSpace(displayKey))
                 .ToList();
+
+            foreach (DisplayInfo display in _detectedDisplays)
+            {
+                string displayKey = GetDisplayKey(display);
+
+                if (string.IsNullOrWhiteSpace(displayKey))
+                {
+                    continue;
+                }
+
+                profile.SavedDisplayLabels[displayKey] = display.DisplayLabel;
+
+                _settings.DisplayAliases ??= new Dictionary<string, string>();
+                _settings.DisplayAliases[displayKey] = display.DisplayLabel;
+            }
         }
 
         _settings.Profiles.Add(profile);
@@ -522,6 +976,35 @@ SetStatus($"Detected {_detectedDisplays.Count} active display(s).");
         SetStatus("Profile deleted.");
     }
 
+    private void PrimaryDisplayCheckBox_Checked(object sender, RoutedEventArgs e)
+    {
+        if (_isLoadingProfile)
+        {
+            return;
+        }
+
+        if (sender is not FrameworkElement element)
+        {
+            return;
+        }
+
+        if (element.DataContext is not ProfileDisplaySelection selectedDisplay)
+        {
+            return;
+        }
+
+        selectedDisplay.Enabled = true;
+        selectedDisplay.Primary = true;
+
+        foreach (ProfileDisplaySelection displaySelection in _profileDisplaySelections)
+        {
+            if (!ReferenceEquals(displaySelection, selectedDisplay))
+            {
+                displaySelection.Primary = false;
+            }
+        }
+    }
+
     private async void SwitchSelectedProfileButton_Click(object sender, RoutedEventArgs e)
     {
         DisplayModeProfile? profile = GetSelectedProfile();
@@ -530,8 +1013,6 @@ SetStatus($"Detected {_detectedDisplays.Count} active display(s).");
         {
             return;
         }
-
-        SaveSelectedProfileFromUi(showSavedStatus: false);
 
         await SwitchToProfileAsync(profile);
     }
@@ -663,8 +1144,8 @@ SetStatus($"Detected {_detectedDisplays.Count} active display(s).");
         RefreshTrayMenu();
 
         UpdateProfileDisplayLabels();
-ProfilesListBox.Items.Refresh();
-UpdateSelectedProfileHeader();
+        ProfilesListBox.Items.Refresh();
+        UpdateSelectedProfileHeader();
 
         if (showSavedStatus)
         {
@@ -674,34 +1155,58 @@ UpdateSelectedProfileHeader();
         return true;
     }
 
-private void PrimaryDisplayCheckBox_Checked(object sender, RoutedEventArgs e)
-{
-    if (_isLoadingProfile)
+    private void SaveDisplayLabelsToProfile(DisplayModeProfile profile)
     {
-        return;
-    }
+        profile.SavedDisplayLabels ??= new Dictionary<string, string>();
+        profile.SavedDisplayDetails ??= new Dictionary<string, SavedDisplayDetails>();
+        _settings.DisplayAliases ??= new Dictionary<string, string>();
+        _settings.DisplayDetails ??= new Dictionary<string, SavedDisplayDetails>();
 
-    if (sender is not FrameworkElement element)
-    {
-        return;
-    }
-
-    if (element.DataContext is not ProfileDisplaySelection selectedDisplay)
-    {
-        return;
-    }
-
-    selectedDisplay.Enabled = true;
-    selectedDisplay.Primary = true;
-
-    foreach (ProfileDisplaySelection displaySelection in _profileDisplaySelections)
-    {
-        if (!ReferenceEquals(displaySelection, selectedDisplay))
+        foreach (ProfileDisplaySelection selection in _profileDisplaySelections)
         {
-            displaySelection.Primary = false;
+            if (string.IsNullOrWhiteSpace(selection.DisplayKey))
+            {
+                continue;
+            }
+
+            string label = selection.MonitorName;
+
+            if (string.IsNullOrWhiteSpace(label))
+            {
+                label = selection.DisplayName;
+            }
+
+            profile.SavedDisplayLabels[selection.DisplayKey] = label;
+            _settings.DisplayAliases[selection.DisplayKey] = label;
+
+            DisplayInfo? activeDisplay = FindDetectedDisplayByKey(selection.DisplayKey);
+
+            if (activeDisplay is not null)
+            {
+                var details = new SavedDisplayDetails
+                {
+                    DisplayName = activeDisplay.DisplayName,
+                    StableDisplayId = activeDisplay.StableDisplayId,
+                    MonitorHardwareCode = activeDisplay.MonitorHardwareCode,
+                    Label = label,
+                    ResolutionText = activeDisplay.ResolutionDisplayText,
+                    PositionText = activeDisplay.PositionText,
+                    PositionX = activeDisplay.PositionX,
+                    PositionY = activeDisplay.PositionY,
+                    Width = activeDisplay.Width,
+                    Height = activeDisplay.Height,
+                    Frequency = activeDisplay.Frequency
+                };
+
+                profile.SavedDisplayDetails[selection.DisplayKey] = details;
+                _settings.DisplayDetails[selection.DisplayKey] = details;
+            }
+            else if (_settings.DisplayDetails.TryGetValue(selection.DisplayKey, out SavedDisplayDetails? savedDetails))
+            {
+                profile.SavedDisplayDetails[selection.DisplayKey] = savedDetails;
+            }
         }
     }
-}
 
     private bool TryApplyDisplaySelections(DisplayModeProfile profile, out string errorMessage)
     {
@@ -709,17 +1214,19 @@ private void PrimaryDisplayCheckBox_Checked(object sender, RoutedEventArgs e)
 
         List<string> enabled = _profileDisplaySelections
             .Where(selection => selection.Enabled)
-            .Select(selection => selection.DisplayName)
+            .Select(selection => selection.DisplayKey)
+            .Where(displayKey => !string.IsNullOrWhiteSpace(displayKey))
             .ToList();
 
         List<string> disabled = _profileDisplaySelections
             .Where(selection => !selection.Enabled)
-            .Select(selection => selection.DisplayName)
+            .Select(selection => selection.DisplayKey)
+            .Where(displayKey => !string.IsNullOrWhiteSpace(displayKey))
             .ToList();
 
         string primary = _profileDisplaySelections
             .FirstOrDefault(selection => selection.Primary)
-            ?.DisplayName ?? "";
+            ?.DisplayKey ?? "";
 
         if (enabled.Count == 0)
         {
@@ -741,6 +1248,8 @@ private void PrimaryDisplayCheckBox_Checked(object sender, RoutedEventArgs e)
         profile.EnabledDisplays = enabled;
         profile.DisabledDisplays = disabled;
         profile.PrimaryDisplayName = primary;
+
+        SaveDisplayLabelsToProfile(profile);
 
         return true;
     }
@@ -777,20 +1286,20 @@ private void PrimaryDisplayCheckBox_Checked(object sender, RoutedEventArgs e)
 
         DisplayModeProfile? selectedProfile = GetSelectedProfile();
 
-        foreach (DisplayModeProfile profile in _settings.Profiles)
+        foreach (DisplayModeProfile otherProfile in _settings.Profiles)
         {
             if (selectedProfile is not null &&
-                string.Equals(profile.Id, selectedProfile.Id, StringComparison.OrdinalIgnoreCase))
+                string.Equals(otherProfile.Id, selectedProfile.Id, StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
 
-            if (string.IsNullOrWhiteSpace(profile.HotkeyKey))
+            if (string.IsNullOrWhiteSpace(otherProfile.HotkeyKey))
             {
                 continue;
             }
 
-            if (!TryGetVirtualKey(profile.HotkeyKey, out uint profileVirtualKey, out _))
+            if (!TryGetVirtualKey(otherProfile.HotkeyKey, out uint profileVirtualKey, out _))
             {
                 continue;
             }
@@ -801,15 +1310,15 @@ private void PrimaryDisplayCheckBox_Checked(object sender, RoutedEventArgs e)
             }
 
             uint profileModifiers = BuildModifierValue(
-                profile.HotkeyCtrl,
-                profile.HotkeyAlt,
-                profile.HotkeyShift,
-                profile.HotkeyWin
+                otherProfile.HotkeyCtrl,
+                otherProfile.HotkeyAlt,
+                otherProfile.HotkeyShift,
+                otherProfile.HotkeyWin
             );
 
             if (profileModifiers == currentModifiers && profileVirtualKey == currentVirtualKey)
             {
-                errorMessage = $"The hotkey {FormatHotkey(ctrl, alt, shift, win, normalizedKey)} is already used by '{profile.Name}'.";
+                errorMessage = $"The hotkey {FormatHotkey(ctrl, alt, shift, win, normalizedKey)} is already used by '{otherProfile.Name}'.";
                 return false;
             }
         }

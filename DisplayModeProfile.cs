@@ -11,11 +11,17 @@ public sealed class DisplayModeProfile
 
     public string Name { get; set; } = "New Profile";
 
+    // These keep their old property names for compatibility, but after migration
+    // they store the stable display identity where available, not only \\.\DISPLAYx.
     public string PrimaryDisplayName { get; set; } = "";
 
     public List<string> EnabledDisplays { get; set; } = new();
 
     public List<string> DisabledDisplays { get; set; } = new();
+
+    public Dictionary<string, string> SavedDisplayLabels { get; set; } = new();
+
+    public Dictionary<string, SavedDisplayDetails> SavedDisplayDetails { get; set; } = new();
 
     public bool HotkeyCtrl { get; set; } = true;
 
@@ -88,15 +94,10 @@ public sealed class DisplayModeProfile
             Name = fallbackName;
         }
 
-        if (EnabledDisplays is null)
-        {
-            EnabledDisplays = new List<string>();
-        }
-
-        if (DisabledDisplays is null)
-        {
-            DisabledDisplays = new List<string>();
-        }
+        EnabledDisplays ??= new List<string>();
+        DisabledDisplays ??= new List<string>();
+        SavedDisplayLabels ??= new Dictionary<string, string>();
+        SavedDisplayDetails ??= new Dictionary<string, SavedDisplayDetails>();
 
         if (!HotkeyCtrl && !HotkeyAlt && !HotkeyShift && !HotkeyWin && !string.IsNullOrWhiteSpace(HotkeyKey))
         {
@@ -117,18 +118,73 @@ public sealed class DisplayModeProfile
             LauncherProcessName = Path.GetFileNameWithoutExtension(LauncherPath);
         }
 
-        if (string.IsNullOrWhiteSpace(PrimaryDisplayLabel))
+        PrimaryDisplayLabel = GetSavedOrRawDisplayLabel(PrimaryDisplayName);
+
+        EnabledDisplaysLabel = EnabledDisplays.Count == 0
+            ? "None"
+            : string.Join(", ", EnabledDisplays.Select(GetSavedOrRawDisplayLabel));
+    }
+
+    public string GetSavedOrRawDisplayLabel(string displayKey)
+    {
+        if (string.IsNullOrWhiteSpace(displayKey))
         {
-            PrimaryDisplayLabel = string.IsNullOrWhiteSpace(PrimaryDisplayName)
-                ? "Not set"
-                : PrimaryDisplayName;
+            return "Not set";
         }
 
-        if (string.IsNullOrWhiteSpace(EnabledDisplaysLabel))
+        if (SavedDisplayLabels is not null &&
+            SavedDisplayLabels.TryGetValue(displayKey, out string? savedLabel) &&
+            !string.IsNullOrWhiteSpace(savedLabel))
         {
-            EnabledDisplaysLabel = EnabledDisplays.Count == 0
-                ? "None"
-                : string.Join(", ", EnabledDisplays);
+            return savedLabel;
         }
+
+        if (SavedDisplayDetails is not null &&
+            SavedDisplayDetails.TryGetValue(displayKey, out SavedDisplayDetails? details) &&
+            !string.IsNullOrWhiteSpace(details.Label))
+        {
+            return details.Label;
+        }
+
+        return displayKey;
+    }
+
+    public SavedDisplayDetails? GetSavedDisplayDetails(string displayKey)
+    {
+        if (string.IsNullOrWhiteSpace(displayKey))
+        {
+            return null;
+        }
+
+        if (SavedDisplayDetails is not null &&
+            SavedDisplayDetails.TryGetValue(displayKey, out SavedDisplayDetails? details))
+        {
+            return details;
+        }
+
+        return null;
+    }
+
+    public SavedDisplayDetails? GetSavedDisplayDetailsForAnyKey(params string[] possibleKeys)
+    {
+        if (SavedDisplayDetails is null)
+        {
+            return null;
+        }
+
+        foreach (string possibleKey in possibleKeys)
+        {
+            if (string.IsNullOrWhiteSpace(possibleKey))
+            {
+                continue;
+            }
+
+            if (SavedDisplayDetails.TryGetValue(possibleKey, out SavedDisplayDetails? details))
+            {
+                return details;
+            }
+        }
+
+        return null;
     }
 }

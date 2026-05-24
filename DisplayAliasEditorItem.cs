@@ -3,49 +3,33 @@ using System.Runtime.CompilerServices;
 
 namespace DisplayDeck;
 
-public sealed class ProfileDisplaySelection : INotifyPropertyChanged
+public sealed class DisplayAliasEditorItem : INotifyPropertyChanged
 {
-    private bool _enabled;
-    private bool _primary;
+    private string _alias = "";
 
     public string DisplayKey { get; set; } = "";
 
     public string DisplayName { get; set; } = "";
 
-    public string MonitorName { get; set; } = "";
+    public string StableDisplayId { get; set; } = "";
+
+    public string DetectedName { get; set; } = "";
 
     public string ResolutionText { get; set; } = "";
 
     public string PositionText { get; set; } = "";
 
-    public string ActiveStateText { get; set; } = "";
-
-    public bool Enabled
+    public string Alias
     {
-        get => _enabled;
+        get => _alias;
         set
         {
-            if (_enabled == value)
+            if (_alias == value)
             {
                 return;
             }
 
-            _enabled = value;
-            OnPropertyChanged();
-        }
-    }
-
-    public bool Primary
-    {
-        get => _primary;
-        set
-        {
-            if (_primary == value)
-            {
-                return;
-            }
-
-            _primary = value;
+            _alias = value;
             OnPropertyChanged();
         }
     }

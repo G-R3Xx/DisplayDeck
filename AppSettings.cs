@@ -25,7 +25,7 @@ public sealed class AppSettings
 
     public bool TvHotkeyWin { get; set; } = false;
 
-    public string TvHotkeyKey { get; set; } = "G";
+    public string TvHotkeyKey { get; set; } = "T";
 
     public bool DeskHotkeyCtrl { get; set; } = true;
 
@@ -39,31 +39,13 @@ public sealed class AppSettings
 
     public int CommandDelayMs { get; set; } = 1500;
 
-    public string TvDisplayName { get; set; } = @"\\.\DISPLAY2";
+    public Dictionary<string, string> DisplayAliases { get; set; } = new();
 
-    public string MainDisplayName { get; set; } = @"\\.\DISPLAY1";
-
-    public string SecondaryDisplayName { get; set; } = @"\\.\DISPLAY3";
+    public Dictionary<string, SavedDisplayDetails> DisplayDetails { get; set; } = new();
 
     public List<DisplayModeProfile> Profiles { get; set; } = new();
 
     public string SelectedProfileId { get; set; } = "";
-
-    public DisplayModeProfile DeskMode { get; set; } = new()
-    {
-        Name = "Desk Mode",
-        PrimaryDisplayName = @"\\.\DISPLAY1",
-        EnabledDisplays = new List<string> { @"\\.\DISPLAY1", @"\\.\DISPLAY3" },
-        DisabledDisplays = new List<string> { @"\\.\DISPLAY2" }
-    };
-
-    public DisplayModeProfile TvGamingMode { get; set; } = new()
-    {
-        Name = "TV Gaming Mode",
-        PrimaryDisplayName = @"\\.\DISPLAY2",
-        EnabledDisplays = new List<string> { @"\\.\DISPLAY2" },
-        DisabledDisplays = new List<string> { @"\\.\DISPLAY1", @"\\.\DISPLAY3" }
-    };
 
     public static string SettingsFolder =>
         Path.Combine(
@@ -117,6 +99,9 @@ public sealed class AppSettings
 
     public void EnsureProfiles()
     {
+        DisplayAliases ??= new Dictionary<string, string>();
+        DisplayDetails ??= new Dictionary<string, SavedDisplayDetails>();
+
         if (Profiles is null)
         {
             Profiles = new List<DisplayModeProfile>();
@@ -128,16 +113,11 @@ public sealed class AppSettings
             {
                 Id = "desk-mode",
                 Name = "Desk Mode",
-                PrimaryDisplayName = DeskMode.PrimaryDisplayName,
-                EnabledDisplays = new List<string>(DeskMode.EnabledDisplays),
-                DisabledDisplays = new List<string>(DeskMode.DisabledDisplays),
                 HotkeyCtrl = DeskHotkeyCtrl,
                 HotkeyAlt = DeskHotkeyAlt,
                 HotkeyShift = DeskHotkeyShift,
                 HotkeyWin = DeskHotkeyWin,
                 HotkeyKey = DeskHotkeyKey,
-                LauncherPath = LauncherPath,
-                LauncherProcessName = LauncherProcessName,
                 LaunchAppAfterSwitch = false,
                 CloseLauncherAfterSwitch = CloseAppOnDeskMode
             });
@@ -146,9 +126,6 @@ public sealed class AppSettings
             {
                 Id = "tv-gaming-mode",
                 Name = "TV Gaming Mode",
-                PrimaryDisplayName = TvGamingMode.PrimaryDisplayName,
-                EnabledDisplays = new List<string>(TvGamingMode.EnabledDisplays),
-                DisabledDisplays = new List<string>(TvGamingMode.DisabledDisplays),
                 HotkeyCtrl = TvHotkeyCtrl,
                 HotkeyAlt = TvHotkeyAlt,
                 HotkeyShift = TvHotkeyShift,

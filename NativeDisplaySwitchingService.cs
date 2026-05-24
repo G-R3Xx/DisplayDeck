@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
@@ -23,8 +24,12 @@ public sealed class NativeDisplaySwitchingService
     private const int DISP_CHANGE_BADMODE = -2;
     private const int DISP_CHANGE_BADPARAM = -5;
 
+    private readonly NativeDisplayDiscoveryService _displayDiscoveryService = new();
+
     public async Task ApplyProfileAsync(DisplayModeProfile profile, int delayMs)
     {
+        profile.EnsureDefaults(profile.Name);
+
         if (profile.EnabledDisplays.Count == 0)
         {
             throw new InvalidOperationException("At least one display must be enabled for this mode.");
@@ -40,23 +45,33 @@ public sealed class NativeDisplaySwitchingService
             throw new InvalidOperationException("The primary display must also be enabled for this mode.");
         }
 
-        foreach (string displayName in profile.EnabledDisplays)
+        IReadOnlyList<DisplayInfo> allDisplays = _displayDiscoveryService.GetDisplays();
+        Dictionary<string, DisplayInfo> displayLookup = BuildDisplayLookup(allDisplays);
+
+        foreach (string displayKey in profile.EnabledDisplays)
         {
-            EnableDisplay(displayName, profile.PrimaryDisplayName);
+            DisplayInfo display = ResolveDisplay(displayKey, displayLookup, "enable");
+            EnableDisplay(display, profile, displayKey);
             await Task.Delay(delayMs);
         }
 
-        SetPrimaryDisplay(profile.PrimaryDisplayName);
+        DisplayInfo primaryDisplay = ResolveDisplay(profile.PrimaryDisplayName, displayLookup, "set primary");
+        SetPrimaryDisplay(primaryDisplay, profile, profile.PrimaryDisplayName);
         await Task.Delay(delayMs);
 
-        foreach (string displayName in profile.DisabledDisplays)
+        foreach (string displayKey in profile.DisabledDisplays)
         {
-            if (string.Equals(displayName, profile.PrimaryDisplayName, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(displayKey, profile.PrimaryDisplayName, StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
 
-            DisableDisplay(displayName);
+            if (!TryResolveDisplay(displayKey, displayLookup, out DisplayInfo? displayToDisable))
+            {
+                continue;
+            }
+
+            DisableDisplay(displayToDisable.DisplayName);
             await Task.Delay(delayMs);
         }
 
@@ -64,31 +79,185 @@ public sealed class NativeDisplaySwitchingService
         await Task.Delay(delayMs);
     }
 
-    private static void EnableDisplay(string displayName, string primaryDisplayName)
+    private static Dictionary<string, DisplayInfo> BuildDisplayLookup(IReadOnlyList<DisplayInfo> displays)
+    {
+        var lookup = new Dictionary<string, DisplayInfo>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (DisplayInfo display in displays)
+        {
+            AddLookupKey(lookup, display.DisplayName, display);
+            AddLookupKey(lookup, display.StableDisplayId, display);
+            AddLookupKey(lookup, display.MonitorHardwareCode, display);
+            AddLookupKey(lookup, display.IdentityKey, display);
+        }
+
+        return lookup;
+    }
+
+    private static void AddLookupKey(Dictionary<string, DisplayInfo> lookup, string key, DisplayInfo display)
+    {
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            return;
+        }
+
+        if (!lookup.ContainsKey(key))
+        {
+            lookup[key] = display;
+        }
+    }
+
+    private static DisplayInfo ResolveDisplay(
+        string displayKey,
+        Dictionary<string, DisplayInfo> lookup,
+        string action
+    )
+    {
+        if (TryResolveDisplay(displayKey, lookup, out DisplayInfo? display))
+        {
+            return display;
+        }
+
+        throw new InvalidOperationException(
+            $"DisplayDeck could not {action} {displayKey}.\n\n" +
+            "The saved display is not currently available. Turn the display on, make sure it is connected, then click Refresh and try again."
+        );
+    }
+
+    private static bool TryResolveDisplay(
+        string displayKey,
+        Dictionary<string, DisplayInfo> lookup,
+        out DisplayInfo display
+    )
+    {
+        display = null!;
+
+        if (string.IsNullOrWhiteSpace(displayKey))
+        {
+            return false;
+        }
+
+        if (lookup.TryGetValue(displayKey, out DisplayInfo? directMatch))
+        {
+            display = directMatch;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static SavedDisplayDetails? GetSavedDetailsForDisplay(
+        DisplayModeProfile profile,
+        string profileDisplayKey,
+        DisplayInfo resolvedDisplay
+    )
+    {
+        return profile.GetSavedDisplayDetailsForAnyKey(
+            profileDisplayKey,
+            resolvedDisplay.IdentityKey,
+            resolvedDisplay.StableDisplayId,
+            resolvedDisplay.MonitorHardwareCode,
+            resolvedDisplay.DisplayName
+        );
+    }
+
+    private static void EnableDisplay(DisplayInfo display, DisplayModeProfile profile, string profileDisplayKey)
     {
         DEVMODE devMode = CreateDevMode();
 
         bool gotSettings =
-            EnumDisplaySettingsEx(displayName, ENUM_REGISTRY_SETTINGS, ref devMode, 0) ||
-            EnumDisplaySettingsEx(displayName, ENUM_CURRENT_SETTINGS, ref devMode, 0);
+            EnumDisplaySettingsEx(display.DisplayName, ENUM_CURRENT_SETTINGS, ref devMode, 0) ||
+            EnumDisplaySettingsEx(display.DisplayName, ENUM_REGISTRY_SETTINGS, ref devMode, 0);
 
         if (!gotSettings)
         {
             throw new InvalidOperationException(
-                $"DisplayDeck could not read settings for {displayName}.\n\n" +
+                $"DisplayDeck could not read settings for {display.DisplayLabel}.\n\n" +
                 "Make sure the display is powered on, connected, and visible to Windows before switching modes."
             );
+        }
+
+        SavedDisplayDetails? savedDetails = GetSavedDetailsForDisplay(profile, profileDisplayKey, display);
+
+        if (savedDetails is not null && savedDetails.HasUsableMode)
+        {
+            devMode.dmPelsWidth = savedDetails.Width;
+            devMode.dmPelsHeight = savedDetails.Height;
+            devMode.dmDisplayFrequency = savedDetails.Frequency;
+            devMode.dmPosition.x = savedDetails.PositionX;
+            devMode.dmPosition.y = savedDetails.PositionY;
+        }
+        else
+        {
+            if (devMode.dmPelsWidth <= 0 || devMode.dmPelsHeight <= 0)
+            {
+                devMode.dmPelsWidth = 1920;
+                devMode.dmPelsHeight = 1080;
+            }
+
+            if (devMode.dmDisplayFrequency <= 0)
+            {
+                devMode.dmDisplayFrequency = 60;
+            }
+        }
+
+        if (devMode.dmBitsPerPel <= 0)
+        {
+            devMode.dmBitsPerPel = 32;
+        }
+
+        devMode.dmFields =
+            DM_POSITION |
+            DM_PELSWIDTH |
+            DM_PELSHEIGHT |
+            DM_BITSPERPEL |
+            DM_DISPLAYFREQUENCY;
+
+        int result = ChangeDisplaySettingsEx(
+            display.DisplayName,
+            ref devMode,
+            IntPtr.Zero,
+            CDS_UPDATEREGISTRY | CDS_NORESET,
+            IntPtr.Zero
+        );
+
+        EnsureSuccess(result, "enable", display.DisplayLabel);
+    }
+
+    private static void SetPrimaryDisplay(DisplayInfo display, DisplayModeProfile profile, string profileDisplayKey)
+    {
+        DEVMODE devMode = CreateDevMode();
+
+        bool gotSettings =
+            EnumDisplaySettingsEx(display.DisplayName, ENUM_CURRENT_SETTINGS, ref devMode, 0) ||
+            EnumDisplaySettingsEx(display.DisplayName, ENUM_REGISTRY_SETTINGS, ref devMode, 0);
+
+        if (!gotSettings)
+        {
+            throw new InvalidOperationException(
+                $"DisplayDeck could not read settings for the primary display {display.DisplayLabel}.\n\n" +
+                "Make sure the display is powered on, connected, and visible to Windows before switching modes."
+            );
+        }
+
+        SavedDisplayDetails? savedDetails = GetSavedDetailsForDisplay(profile, profileDisplayKey, display);
+
+        if (savedDetails is not null && savedDetails.HasUsableMode)
+        {
+            devMode.dmPelsWidth = savedDetails.Width;
+            devMode.dmPelsHeight = savedDetails.Height;
+            devMode.dmDisplayFrequency = savedDetails.Frequency;
+        }
+
+        if (devMode.dmBitsPerPel <= 0)
+        {
+            devMode.dmBitsPerPel = 32;
         }
 
         if (devMode.dmPelsWidth <= 0 || devMode.dmPelsHeight <= 0)
         {
             devMode.dmPelsWidth = 1920;
             devMode.dmPelsHeight = 1080;
-        }
-
-        if (devMode.dmBitsPerPel <= 0)
-        {
-            devMode.dmBitsPerPel = 32;
         }
 
         if (devMode.dmDisplayFrequency <= 0)
@@ -103,52 +272,18 @@ public sealed class NativeDisplaySwitchingService
             DM_BITSPERPEL |
             DM_DISPLAYFREQUENCY;
 
-        if (string.Equals(displayName, primaryDisplayName, StringComparison.OrdinalIgnoreCase))
-        {
-            devMode.dmPosition.x = 0;
-            devMode.dmPosition.y = 0;
-        }
-
-        int result = ChangeDisplaySettingsEx(
-            displayName,
-            ref devMode,
-            IntPtr.Zero,
-            CDS_UPDATEREGISTRY | CDS_NORESET,
-            IntPtr.Zero
-        );
-
-        EnsureSuccess(result, "enable", displayName);
-    }
-
-    private static void SetPrimaryDisplay(string displayName)
-    {
-        DEVMODE devMode = CreateDevMode();
-
-        bool gotSettings =
-            EnumDisplaySettingsEx(displayName, ENUM_CURRENT_SETTINGS, ref devMode, 0) ||
-            EnumDisplaySettingsEx(displayName, ENUM_REGISTRY_SETTINGS, ref devMode, 0);
-
-        if (!gotSettings)
-        {
-            throw new InvalidOperationException(
-                $"DisplayDeck could not read settings for the primary display {displayName}.\n\n" +
-                "Make sure the display is powered on, connected, and visible to Windows before switching modes."
-            );
-        }
-
-        devMode.dmFields = DM_POSITION;
         devMode.dmPosition.x = 0;
         devMode.dmPosition.y = 0;
 
         int result = ChangeDisplaySettingsEx(
-            displayName,
+            display.DisplayName,
             ref devMode,
             IntPtr.Zero,
             CDS_UPDATEREGISTRY | CDS_NORESET,
             IntPtr.Zero
         );
 
-        EnsureSuccess(result, "set primary", displayName);
+        EnsureSuccess(result, "set primary", display.DisplayLabel);
     }
 
     private static void DisableDisplay(string displayName)
@@ -205,7 +340,7 @@ public sealed class NativeDisplaySwitchingService
             throw new InvalidOperationException(
                 $"DisplayDeck could not {action} {displayText}.\n\n" +
                 "Windows rejected the display mode. This usually happens when the display is disconnected, powered off, asleep, or not currently available over HDMI.\n\n" +
-                "Turn the TV on, make sure it is on the correct HDMI input, then try TV Gaming Mode again."
+                "Turn the TV on, make sure it is on the correct HDMI input, then try the profile again."
             );
         }
 
@@ -213,7 +348,7 @@ public sealed class NativeDisplaySwitchingService
         {
             throw new InvalidOperationException(
                 $"DisplayDeck could not {action} {displayText}.\n\n" +
-                "Windows rejected the display command. Refresh displays, confirm the mode setup, then save settings again."
+                "Windows rejected the display command. Refresh displays, confirm the profile setup, then save settings again."
             );
         }
 

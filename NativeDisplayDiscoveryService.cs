@@ -38,13 +38,16 @@ public sealed class NativeDisplayDiscoveryService
             bool foundMonitor = EnumDisplayDevices(displayDevice.DeviceName, 0, ref monitorDevice, 0);
 
             string monitorName = "";
+            string stableDisplayId = "";
+            string monitorHardwareCode = "";
 
             if (foundMonitor)
             {
-                string monitorCode = ExtractMonitorHardwareCode(monitorDevice.DeviceID);
+                stableDisplayId = BuildStableDisplayId(monitorDevice.DeviceID, monitorDevice.DeviceKey);
+                monitorHardwareCode = ExtractMonitorHardwareCode(monitorDevice.DeviceID);
 
-                if (!string.IsNullOrWhiteSpace(monitorCode) &&
-                    monitorNamesByCode.TryGetValue(monitorCode, out string? wmiName) &&
+                if (!string.IsNullOrWhiteSpace(monitorHardwareCode) &&
+                    monitorNamesByCode.TryGetValue(monitorHardwareCode, out string? wmiName) &&
                     !string.IsNullOrWhiteSpace(wmiName))
                 {
                     monitorName = wmiName;
@@ -55,6 +58,16 @@ public sealed class NativeDisplayDiscoveryService
                 }
             }
 
+            if (string.IsNullOrWhiteSpace(stableDisplayId))
+            {
+                stableDisplayId = BuildStableDisplayId(displayDevice.DeviceID, displayDevice.DeviceKey);
+            }
+
+            if (string.IsNullOrWhiteSpace(stableDisplayId))
+            {
+                stableDisplayId = displayDevice.DeviceName;
+            }
+
             if (string.IsNullOrWhiteSpace(monitorName))
             {
                 monitorName = displayDevice.DeviceString;
@@ -63,6 +76,8 @@ public sealed class NativeDisplayDiscoveryService
             var info = new DisplayInfo
             {
                 DisplayName = displayDevice.DeviceName,
+                StableDisplayId = stableDisplayId,
+                MonitorHardwareCode = monitorHardwareCode,
                 DeviceString = foundMonitor
                     ? $"{displayDevice.DeviceString} / {monitorDevice.DeviceString}"
                     : displayDevice.DeviceString,
@@ -97,6 +112,24 @@ public sealed class NativeDisplayDiscoveryService
         }
 
         return results;
+    }
+
+    private static string BuildStableDisplayId(string deviceId, string deviceKey)
+    {
+        string cleanDeviceId = (deviceId ?? "").Trim();
+        string cleanDeviceKey = (deviceKey ?? "").Trim();
+
+        if (!string.IsNullOrWhiteSpace(cleanDeviceId))
+        {
+            return cleanDeviceId.ToUpperInvariant();
+        }
+
+        if (!string.IsNullOrWhiteSpace(cleanDeviceKey))
+        {
+            return cleanDeviceKey.ToUpperInvariant();
+        }
+
+        return "";
     }
 
     private static Dictionary<string, string> GetWmiMonitorNamesByHardwareCode()
