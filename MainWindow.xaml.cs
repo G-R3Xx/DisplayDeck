@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
@@ -36,6 +37,7 @@ public partial class MainWindow : Window
 
     private HwndSource? _hwndSource;
     private Forms.NotifyIcon? _trayIcon;
+    private Drawing.Icon? _appTrayIcon;
 
     private readonly Dictionary<int, string> _hotkeyProfileMap = new();
 
@@ -74,10 +76,12 @@ public partial class MainWindow : Window
 
     private void CreateTrayIcon()
     {
+        _appTrayIcon = LoadDisplayDeckIcon();
+
         _trayIcon = new Forms.NotifyIcon
         {
             Text = "DisplayDeck",
-            Icon = Drawing.SystemIcons.Application,
+            Icon = _appTrayIcon,
             Visible = true,
             ContextMenuStrip = BuildTrayMenu()
         };
@@ -86,6 +90,31 @@ public partial class MainWindow : Window
         {
             ShowMainWindow();
         };
+    }
+
+    private static Drawing.Icon LoadDisplayDeckIcon()
+    {
+        try
+        {
+            var resourceInfo = System.Windows.Application.GetResourceStream(
+                new Uri("pack://application:,,,/Assets/DisplayDeck.ico", UriKind.Absolute)
+            );
+
+            if (resourceInfo?.Stream is not null)
+            {
+                using var memoryStream = new MemoryStream();
+                resourceInfo.Stream.CopyTo(memoryStream);
+                memoryStream.Position = 0;
+
+                return new Drawing.Icon(memoryStream);
+            }
+        }
+        catch
+        {
+            // Fallback below.
+        }
+
+        return Drawing.SystemIcons.Application;
     }
 
     private Forms.ContextMenuStrip BuildTrayMenu()
@@ -191,6 +220,12 @@ public partial class MainWindow : Window
             _trayIcon.Dispose();
             _trayIcon = null;
         }
+
+        if (_appTrayIcon is not null)
+        {
+            _appTrayIcon.Dispose();
+            _appTrayIcon = null;
+        }
     }
 
     private void LoadSettingsIntoUi()
@@ -281,28 +316,28 @@ public partial class MainWindow : Window
         _isLoadingProfile = false;
     }
 
-   private void UpdateSelectedProfileHeader()
-{
-    DisplayModeProfile? profile = GetSelectedProfile();
-
-    if (profile is null)
+    private void UpdateSelectedProfileHeader()
     {
-        SwitchSelectedProfileButtonTitle.Text = "Switch Selected Profile";
-        SwitchSelectedProfileButtonSubtitle.Text = "Applies the selected display layout";
-        SelectedProfileHotkeyDisplayText.Text = "";
-        ProfileDisplaySetupEditingText.Text = "Currently editing: No profile selected";
-        return;
+        DisplayModeProfile? profile = GetSelectedProfile();
+
+        if (profile is null)
+        {
+            SwitchSelectedProfileButtonTitle.Text = "Switch Selected Profile";
+            SwitchSelectedProfileButtonSubtitle.Text = "Applies the selected display layout";
+            SelectedProfileHotkeyDisplayText.Text = "";
+            ProfileDisplaySetupEditingText.Text = "Currently editing: No profile selected";
+            return;
+        }
+
+        SwitchSelectedProfileButtonTitle.Text = "Switch to " + profile.Name;
+        SwitchSelectedProfileButtonSubtitle.Text = "Applies this display profile";
+
+        SelectedProfileHotkeyDisplayText.Text = string.IsNullOrWhiteSpace(profile.HotkeyKey)
+            ? "No hotkey set"
+            : FormatHotkey(profile.HotkeyCtrl, profile.HotkeyAlt, profile.HotkeyShift, profile.HotkeyWin, profile.HotkeyKey);
+
+        ProfileDisplaySetupEditingText.Text = "Currently editing: " + profile.Name;
     }
-
-    SwitchSelectedProfileButtonTitle.Text = "Switch to " + profile.Name;
-    SwitchSelectedProfileButtonSubtitle.Text = "Applies this display profile";
-
-    SelectedProfileHotkeyDisplayText.Text = string.IsNullOrWhiteSpace(profile.HotkeyKey)
-        ? "No hotkey set"
-        : FormatHotkey(profile.HotkeyCtrl, profile.HotkeyAlt, profile.HotkeyShift, profile.HotkeyWin, profile.HotkeyKey);
-
-    ProfileDisplaySetupEditingText.Text = "Currently editing: " + profile.Name;
-}
 
     private void BuildProfileDisplaySelections(DisplayModeProfile profile)
     {
@@ -581,6 +616,35 @@ public partial class MainWindow : Window
 
         return true;
     }
+
+private void PrimaryDisplayCheckBox_Checked(object sender, RoutedEventArgs e)
+{
+    if (_isLoadingProfile)
+    {
+        return;
+    }
+
+    if (sender is not FrameworkElement element)
+    {
+        return;
+    }
+
+    if (element.DataContext is not ProfileDisplaySelection selectedDisplay)
+    {
+        return;
+    }
+
+    selectedDisplay.Enabled = true;
+    selectedDisplay.Primary = true;
+
+    foreach (ProfileDisplaySelection displaySelection in _profileDisplaySelections)
+    {
+        if (!ReferenceEquals(displaySelection, selectedDisplay))
+        {
+            displaySelection.Primary = false;
+        }
+    }
+}
 
     private bool TryApplyDisplaySelections(DisplayModeProfile profile, out string errorMessage)
     {

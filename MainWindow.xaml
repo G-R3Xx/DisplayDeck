@@ -671,7 +671,8 @@
                                                       Margin="0,0,20,0"/>
 
                                             <CheckBox Content="Primary"
-                                                      IsChecked="{Binding Primary, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+          IsChecked="{Binding Primary, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+          Checked="PrimaryDisplayCheckBox_Checked"/>
                                         </StackPanel>
                                     </Grid>
                                 </Border>
