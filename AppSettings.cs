@@ -17,6 +17,26 @@ public sealed class AppSettings
 
     public bool StartWithWindows { get; set; } = false;
 
+    public bool TvHotkeyCtrl { get; set; } = true;
+
+    public bool TvHotkeyAlt { get; set; } = true;
+
+    public bool TvHotkeyShift { get; set; } = false;
+
+    public bool TvHotkeyWin { get; set; } = false;
+
+    public string TvHotkeyKey { get; set; } = "G";
+
+    public bool DeskHotkeyCtrl { get; set; } = true;
+
+    public bool DeskHotkeyAlt { get; set; } = true;
+
+    public bool DeskHotkeyShift { get; set; } = false;
+
+    public bool DeskHotkeyWin { get; set; } = false;
+
+    public string DeskHotkeyKey { get; set; } = "D";
+
     public int CommandDelayMs { get; set; } = 1500;
 
     public string TvDisplayName { get; set; } = @"\\.\DISPLAY2";
@@ -59,6 +79,7 @@ public sealed class AppSettings
                 var defaultSettings = new AppSettings();
                 defaultSettings.EnsureProfiles();
                 defaultSettings.EnsureLauncherProcessName();
+                defaultSettings.EnsureHotkeys();
                 return defaultSettings;
             }
 
@@ -67,6 +88,7 @@ public sealed class AppSettings
 
             settings.EnsureProfiles();
             settings.EnsureLauncherProcessName();
+            settings.EnsureHotkeys();
 
             return settings;
         }
@@ -76,6 +98,7 @@ public sealed class AppSettings
 
             fallbackSettings.EnsureProfiles();
             fallbackSettings.EnsureLauncherProcessName();
+            fallbackSettings.EnsureHotkeys();
 
             return fallbackSettings;
         }
@@ -85,6 +108,7 @@ public sealed class AppSettings
     {
         EnsureProfiles();
         EnsureLauncherProcessName();
+        EnsureHotkeys();
 
         Directory.CreateDirectory(SettingsFolder);
 
@@ -147,5 +171,34 @@ public sealed class AppSettings
         {
             LauncherProcessName = Path.GetFileNameWithoutExtension(LauncherPath);
         }
+    }
+
+    public void EnsureHotkeys()
+    {
+        if (string.IsNullOrWhiteSpace(TvHotkeyKey))
+        {
+            TvHotkeyKey = "G";
+        }
+
+        if (!TvHotkeyCtrl && !TvHotkeyAlt && !TvHotkeyShift && !TvHotkeyWin)
+        {
+            TvHotkeyCtrl = true;
+            TvHotkeyAlt = true;
+        }
+
+        TvHotkeyKey = TvHotkeyKey.Trim().ToUpperInvariant();
+
+        if (string.IsNullOrWhiteSpace(DeskHotkeyKey))
+        {
+            DeskHotkeyKey = "D";
+        }
+
+        if (!DeskHotkeyCtrl && !DeskHotkeyAlt && !DeskHotkeyShift && !DeskHotkeyWin)
+        {
+            DeskHotkeyCtrl = true;
+            DeskHotkeyAlt = true;
+        }
+
+        DeskHotkeyKey = DeskHotkeyKey.Trim().ToUpperInvariant();
     }
 }

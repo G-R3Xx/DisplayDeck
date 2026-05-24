@@ -122,7 +122,6 @@
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
-            <!-- HERO -->
             <Border Grid.Row="0"
                     Background="{StaticResource CardBackground}"
                     BorderBrush="{StaticResource CardBorder}"
@@ -164,7 +163,6 @@
                 </StackPanel>
             </Border>
 
-            <!-- BIG MODE SWITCHERS -->
             <Grid Grid.Row="2">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -213,7 +211,6 @@
                 </Button>
             </Grid>
 
-            <!-- SWITCHING DELAY NOTICE -->
             <Border Grid.Row="4"
                     Background="#EEF6FF"
                     BorderBrush="#BFDBFE"
@@ -235,7 +232,6 @@
                 </StackPanel>
             </Border>
 
-            <!-- HOTKEYS -->
             <Border Grid.Row="6"
                     Background="{StaticResource CardBackground}"
                     BorderBrush="{StaticResource CardBorder}"
@@ -274,30 +270,20 @@
                                            FontSize="18"
                                            FontWeight="Bold"/>
 
-                                <StackPanel Orientation="Horizontal"
-                                            Margin="0,14,0,0">
+                                <Border Background="#FFFFFF"
+                                        BorderBrush="#CBD5E1"
+                                        BorderThickness="1"
+                                        CornerRadius="10"
+                                        Padding="16,10"
+                                        HorizontalAlignment="Left"
+                                        Margin="0,14,0,0">
 
-                                    <Border Style="{StaticResource KeyCap}">
-                                        <TextBlock Text="Ctrl"
-                                                   Foreground="{StaticResource TextPrimary}"
-                                                   FontSize="20"
-                                                   FontWeight="Bold"/>
-                                    </Border>
-
-                                    <Border Style="{StaticResource KeyCap}">
-                                        <TextBlock Text="Alt"
-                                                   Foreground="{StaticResource TextPrimary}"
-                                                   FontSize="20"
-                                                   FontWeight="Bold"/>
-                                    </Border>
-
-                                    <Border Style="{StaticResource KeyCap}">
-                                        <TextBlock Text="G"
-                                                   Foreground="{StaticResource AccentBlue}"
-                                                   FontSize="20"
-                                                   FontWeight="Bold"/>
-                                    </Border>
-                                </StackPanel>
+                                    <TextBlock x:Name="TvHotkeyDisplayText"
+                                               Text="Ctrl + Alt + G"
+                                               Foreground="{StaticResource AccentBlue}"
+                                               FontSize="24"
+                                               FontWeight="Bold"/>
+                                </Border>
 
                                 <TextBlock Text="Activates the TV profile and opens the selected launcher app."
                                            Foreground="{StaticResource TextSecondary}"
@@ -320,30 +306,20 @@
                                            FontSize="18"
                                            FontWeight="Bold"/>
 
-                                <StackPanel Orientation="Horizontal"
-                                            Margin="0,14,0,0">
+                                <Border Background="#FFFFFF"
+                                        BorderBrush="#CBD5E1"
+                                        BorderThickness="1"
+                                        CornerRadius="10"
+                                        Padding="16,10"
+                                        HorizontalAlignment="Left"
+                                        Margin="0,14,0,0">
 
-                                    <Border Style="{StaticResource KeyCap}">
-                                        <TextBlock Text="Ctrl"
-                                                   Foreground="{StaticResource TextPrimary}"
-                                                   FontSize="20"
-                                                   FontWeight="Bold"/>
-                                    </Border>
-
-                                    <Border Style="{StaticResource KeyCap}">
-                                        <TextBlock Text="Alt"
-                                                   Foreground="{StaticResource TextPrimary}"
-                                                   FontSize="20"
-                                                   FontWeight="Bold"/>
-                                    </Border>
-
-                                    <Border Style="{StaticResource KeyCap}">
-                                        <TextBlock Text="D"
-                                                   Foreground="#334155"
-                                                   FontSize="20"
-                                                   FontWeight="Bold"/>
-                                    </Border>
-                                </StackPanel>
+                                    <TextBlock x:Name="DeskHotkeyDisplayText"
+                                               Text="Ctrl + Alt + D"
+                                               Foreground="#334155"
+                                               FontSize="24"
+                                               FontWeight="Bold"/>
+                                </Border>
 
                                 <TextBlock Text="Returns to desk displays and closes the launcher app if enabled."
                                            Foreground="{StaticResource TextSecondary}"
@@ -356,7 +332,6 @@
                 </StackPanel>
             </Border>
 
-            <!-- DETECTED DISPLAYS AS CARDS -->
             <Border Grid.Row="8"
                     Background="{StaticResource CardBackground}"
                     BorderBrush="{StaticResource CardBorder}"
@@ -466,7 +441,6 @@
                 </StackPanel>
             </Border>
 
-            <!-- MODE BUILDER AS CARDS -->
             <Border Grid.Row="10"
                     Background="{StaticResource CardBackground}"
                     BorderBrush="{StaticResource CardBorder}"
@@ -630,7 +604,6 @@
                 </StackPanel>
             </Border>
 
-            <!-- SETTINGS -->
             <Border Grid.Row="12"
                     Background="{StaticResource CardBackground}"
                     BorderBrush="{StaticResource CardBorder}"
@@ -650,6 +623,8 @@
                         <RowDefinition Height="18"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="14"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="20"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="20"/>
                         <RowDefinition Height="Auto"/>
@@ -696,7 +671,88 @@
                              Grid.ColumnSpan="2"
                              x:Name="LauncherProcessNameBox"/>
 
-                    <StackPanel Grid.Row="6"
+                    <Border Grid.Row="6"
+                            Grid.ColumnSpan="3"
+                            Background="#F8FAFC"
+                            BorderBrush="#D8E1EC"
+                            BorderThickness="1"
+                            CornerRadius="20"
+                            Padding="18">
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="22"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="TV Gaming Mode Hotkey"
+                                           Foreground="#1E3A8A"
+                                           FontSize="17"
+                                           FontWeight="Bold"/>
+
+                                <StackPanel Orientation="Horizontal"
+                                            Margin="0,12,0,0">
+
+                                    <CheckBox x:Name="TvHotkeyCtrlCheckBox"
+                                              Content="Ctrl"
+                                              Margin="0,0,12,0"/>
+
+                                    <CheckBox x:Name="TvHotkeyAltCheckBox"
+                                              Content="Alt"
+                                              Margin="0,0,12,0"/>
+
+                                    <CheckBox x:Name="TvHotkeyShiftCheckBox"
+                                              Content="Shift"
+                                              Margin="0,0,12,0"/>
+
+                                    <CheckBox x:Name="TvHotkeyWinCheckBox"
+                                              Content="Win"
+                                              Margin="0,0,12,0"/>
+
+                                    <TextBox x:Name="TvHotkeyKeyBox"
+                                             Width="72"
+                                             HorizontalContentAlignment="Center"
+                                             FontWeight="Bold"/>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Desk Mode Hotkey"
+                                           Foreground="#334155"
+                                           FontSize="17"
+                                           FontWeight="Bold"/>
+
+                                <StackPanel Orientation="Horizontal"
+                                            Margin="0,12,0,0">
+
+                                    <CheckBox x:Name="DeskHotkeyCtrlCheckBox"
+                                              Content="Ctrl"
+                                              Margin="0,0,12,0"/>
+
+                                    <CheckBox x:Name="DeskHotkeyAltCheckBox"
+                                              Content="Alt"
+                                              Margin="0,0,12,0"/>
+
+                                    <CheckBox x:Name="DeskHotkeyShiftCheckBox"
+                                              Content="Shift"
+                                              Margin="0,0,12,0"/>
+
+                                    <CheckBox x:Name="DeskHotkeyWinCheckBox"
+                                              Content="Win"
+                                              Margin="0,0,12,0"/>
+
+                                    <TextBox x:Name="DeskHotkeyKeyBox"
+                                             Width="72"
+                                             HorizontalContentAlignment="Center"
+                                             FontWeight="Bold"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <StackPanel Grid.Row="8"
                                 Grid.Column="1"
                                 Grid.ColumnSpan="2"
                                 Orientation="Horizontal"
@@ -723,17 +779,16 @@
                                 Click="SaveSettingsButton_Click"/>
                     </StackPanel>
 
-                    <TextBlock Grid.Row="8"
+                    <TextBlock Grid.Row="10"
                                Grid.Column="1"
                                Grid.ColumnSpan="2"
                                Foreground="{StaticResource TextMuted}"
                                FontSize="13"
                                TextWrapping="Wrap"
-                               Text="When Start with Windows is enabled, DisplayDeck will open automatically after login and remain available in the tray."/>
+                               Text="Hotkey keys can be letters, numbers, function keys such as F8, or common keys such as Enter, Space, Escape, Home, End, PageUp, and PageDown."/>
                 </Grid>
             </Border>
 
-            <!-- STATUS -->
             <Border Grid.Row="14"
                     Background="{StaticResource CardBackground}"
                     BorderBrush="{StaticResource CardBorder}"

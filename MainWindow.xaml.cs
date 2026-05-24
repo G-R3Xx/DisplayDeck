@@ -6,6 +6,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Interop;
 using Forms = System.Windows.Forms;
 using Drawing = System.Drawing;
@@ -24,9 +25,9 @@ public partial class MainWindow : Window
 
     private const uint MOD_ALT = 0x0001;
     private const uint MOD_CONTROL = 0x0002;
-
-    private const uint VK_G = 0x47;
-    private const uint VK_D = 0x44;
+    private const uint MOD_SHIFT = 0x0004;
+    private const uint MOD_WIN = 0x0008;
+    private const uint MOD_NOREPEAT = 0x4000;
 
     private AppSettings _settings;
     private DisplayModeService _displayModeService;
@@ -41,6 +42,7 @@ public partial class MainWindow : Window
     private bool _isSwitching;
     private bool _isExitRequested;
     private bool _hasShownTrayMessage;
+    private bool _hotkeysRegistered;
 
     public MainWindow()
     {
@@ -58,6 +60,7 @@ public partial class MainWindow : Window
 
         LoadSettingsIntoUi();
         LoadDetectedDisplays();
+        UpdateHotkeyDisplayText();
     }
 
     private void MainWindow_SourceInitialized(object? sender, EventArgs e)
@@ -66,17 +69,7 @@ public partial class MainWindow : Window
         _hwndSource = HwndSource.FromHwnd(helper.Handle);
         _hwndSource?.AddHook(WndProc);
 
-        bool tvHotkeyRegistered = RegisterHotKey(helper.Handle, HOTKEY_ID_TV_MODE, MOD_CONTROL | MOD_ALT, VK_G);
-        bool deskHotkeyRegistered = RegisterHotKey(helper.Handle, HOTKEY_ID_DESK_MODE, MOD_CONTROL | MOD_ALT, VK_D);
-
-        if (tvHotkeyRegistered && deskHotkeyRegistered)
-        {
-            SetStatus("Ready. Hotkeys active: Ctrl + Alt + G = TV Gaming Mode, Ctrl + Alt + D = Desk Mode.");
-        }
-        else
-        {
-            SetStatus("Ready. One or more hotkeys could not be registered. Another app may already be using them.");
-        }
+        RegisterConfiguredHotkeys();
     }
 
     private void CreateTrayIcon()
@@ -176,10 +169,7 @@ public partial class MainWindow : Window
 
     private void MainWindow_Closed(object? sender, EventArgs e)
     {
-        var helper = new WindowInteropHelper(this);
-
-        UnregisterHotKey(helper.Handle, HOTKEY_ID_TV_MODE);
-        UnregisterHotKey(helper.Handle, HOTKEY_ID_DESK_MODE);
+        UnregisterConfiguredHotkeys();
 
         _hwndSource?.RemoveHook(WndProc);
 
@@ -189,6 +179,83 @@ public partial class MainWindow : Window
             _trayIcon.Dispose();
             _trayIcon = null;
         }
+    }
+
+    private void RegisterConfiguredHotkeys()
+    {
+        var helper = new WindowInteropHelper(this);
+
+        if (helper.Handle == IntPtr.Zero)
+        {
+            return;
+        }
+
+        UnregisterConfiguredHotkeys();
+
+        bool tvHotkeyReady = TryGetVirtualKey(_settings.TvHotkeyKey, out uint tvVirtualKey, out _);
+        bool deskHotkeyReady = TryGetVirtualKey(_settings.DeskHotkeyKey, out uint deskVirtualKey, out _);
+
+        if (!tvHotkeyReady || !deskHotkeyReady)
+        {
+            SetStatus("Hotkeys could not be registered because one or more keys are invalid.");
+            return;
+        }
+
+        uint tvModifiers = BuildModifierValue(
+            _settings.TvHotkeyCtrl,
+            _settings.TvHotkeyAlt,
+            _settings.TvHotkeyShift,
+            _settings.TvHotkeyWin
+        );
+
+        uint deskModifiers = BuildModifierValue(
+            _settings.DeskHotkeyCtrl,
+            _settings.DeskHotkeyAlt,
+            _settings.DeskHotkeyShift,
+            _settings.DeskHotkeyWin
+        );
+
+        bool tvRegistered = RegisterHotKey(
+            helper.Handle,
+            HOTKEY_ID_TV_MODE,
+            tvModifiers | MOD_NOREPEAT,
+            tvVirtualKey
+        );
+
+        bool deskRegistered = RegisterHotKey(
+            helper.Handle,
+            HOTKEY_ID_DESK_MODE,
+            deskModifiers | MOD_NOREPEAT,
+            deskVirtualKey
+        );
+
+        _hotkeysRegistered = tvRegistered || deskRegistered;
+
+        UpdateHotkeyDisplayText();
+
+        if (tvRegistered && deskRegistered)
+        {
+            SetStatus($"Ready. Hotkeys active: {FormatHotkey(_settings.TvHotkeyCtrl, _settings.TvHotkeyAlt, _settings.TvHotkeyShift, _settings.TvHotkeyWin, _settings.TvHotkeyKey)} = TV Gaming Mode, {FormatHotkey(_settings.DeskHotkeyCtrl, _settings.DeskHotkeyAlt, _settings.DeskHotkeyShift, _settings.DeskHotkeyWin, _settings.DeskHotkeyKey)} = Desk Mode.");
+        }
+        else
+        {
+            SetStatus("Ready. One or more hotkeys could not be registered. Another app may already be using the same shortcut.");
+        }
+    }
+
+    private void UnregisterConfiguredHotkeys()
+    {
+        var helper = new WindowInteropHelper(this);
+
+        if (helper.Handle == IntPtr.Zero)
+        {
+            return;
+        }
+
+        UnregisterHotKey(helper.Handle, HOTKEY_ID_TV_MODE);
+        UnregisterHotKey(helper.Handle, HOTKEY_ID_DESK_MODE);
+
+        _hotkeysRegistered = false;
     }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -270,7 +337,6 @@ public partial class MainWindow : Window
     private void SaveSettingsButton_Click(object sender, RoutedEventArgs e)
     {
         SaveSettingsFromUi();
-        SetStatus("Settings saved. Hotkeys: Ctrl + Alt + G = TV Gaming Mode, Ctrl + Alt + D = Desk Mode.");
     }
 
     private void BrowseLauncher_Click(object sender, RoutedEventArgs e)
@@ -314,7 +380,7 @@ public partial class MainWindow : Window
 
             BuildModeSelections();
 
-            SetStatus($"Detected {_detectedDisplays.Count} active display(s). Hotkeys: Ctrl + Alt + G / Ctrl + Alt + D.");
+            SetStatus($"Detected {_detectedDisplays.Count} active display(s).");
         }
         catch (Exception ex)
         {
@@ -351,10 +417,34 @@ public partial class MainWindow : Window
         LaunchAppCheckBox.IsChecked = _settings.LaunchAppOnTvMode;
         CloseAppCheckBox.IsChecked = _settings.CloseAppOnDeskMode;
         StartWithWindowsCheckBox.IsChecked = _settings.StartWithWindows;
+
+        TvHotkeyCtrlCheckBox.IsChecked = _settings.TvHotkeyCtrl;
+        TvHotkeyAltCheckBox.IsChecked = _settings.TvHotkeyAlt;
+        TvHotkeyShiftCheckBox.IsChecked = _settings.TvHotkeyShift;
+        TvHotkeyWinCheckBox.IsChecked = _settings.TvHotkeyWin;
+        TvHotkeyKeyBox.Text = _settings.TvHotkeyKey;
+
+        DeskHotkeyCtrlCheckBox.IsChecked = _settings.DeskHotkeyCtrl;
+        DeskHotkeyAltCheckBox.IsChecked = _settings.DeskHotkeyAlt;
+        DeskHotkeyShiftCheckBox.IsChecked = _settings.DeskHotkeyShift;
+        DeskHotkeyWinCheckBox.IsChecked = _settings.DeskHotkeyWin;
+        DeskHotkeyKeyBox.Text = _settings.DeskHotkeyKey;
     }
 
     private void SaveSettingsFromUi()
     {
+        if (!TryReadHotkeyEditorValues(out string errorMessage))
+        {
+            System.Windows.MessageBox.Show(
+                errorMessage,
+                "Invalid Hotkey",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning
+            );
+
+            return;
+        }
+
         _settings.LauncherPath = LauncherPathBox.Text.Trim();
         _settings.LauncherProcessName = LauncherProcessNameBox.Text.Trim();
 
@@ -368,6 +458,76 @@ public partial class MainWindow : Window
         _settings.Save();
 
         _displayModeService = new DisplayModeService(_settings);
+
+        RegisterConfiguredHotkeys();
+        UpdateHotkeyDisplayText();
+
+        SetStatus("Settings saved. Hotkeys updated.");
+    }
+
+    private bool TryReadHotkeyEditorValues(out string errorMessage)
+    {
+        errorMessage = "";
+
+        bool tvCtrl = TvHotkeyCtrlCheckBox.IsChecked == true;
+        bool tvAlt = TvHotkeyAltCheckBox.IsChecked == true;
+        bool tvShift = TvHotkeyShiftCheckBox.IsChecked == true;
+        bool tvWin = TvHotkeyWinCheckBox.IsChecked == true;
+
+        bool deskCtrl = DeskHotkeyCtrlCheckBox.IsChecked == true;
+        bool deskAlt = DeskHotkeyAltCheckBox.IsChecked == true;
+        bool deskShift = DeskHotkeyShiftCheckBox.IsChecked == true;
+        bool deskWin = DeskHotkeyWinCheckBox.IsChecked == true;
+
+        string tvKeyRaw = TvHotkeyKeyBox.Text.Trim();
+        string deskKeyRaw = DeskHotkeyKeyBox.Text.Trim();
+
+        if (!tvCtrl && !tvAlt && !tvShift && !tvWin)
+        {
+            errorMessage = "TV Gaming Mode hotkey must include at least one modifier such as Ctrl, Alt, Shift, or Win.";
+            return false;
+        }
+
+        if (!deskCtrl && !deskAlt && !deskShift && !deskWin)
+        {
+            errorMessage = "Desk Mode hotkey must include at least one modifier such as Ctrl, Alt, Shift, or Win.";
+            return false;
+        }
+
+        if (!TryGetVirtualKey(tvKeyRaw, out uint tvVirtualKey, out string tvKeyNormalized))
+        {
+            errorMessage = "TV Gaming Mode hotkey key is invalid. Try a letter, number, F1-F12, Enter, Space, Escape, Home, End, PageUp, or PageDown.";
+            return false;
+        }
+
+        if (!TryGetVirtualKey(deskKeyRaw, out uint deskVirtualKey, out string deskKeyNormalized))
+        {
+            errorMessage = "Desk Mode hotkey key is invalid. Try a letter, number, F1-F12, Enter, Space, Escape, Home, End, PageUp, or PageDown.";
+            return false;
+        }
+
+        uint tvModifiers = BuildModifierValue(tvCtrl, tvAlt, tvShift, tvWin);
+        uint deskModifiers = BuildModifierValue(deskCtrl, deskAlt, deskShift, deskWin);
+
+        if (tvModifiers == deskModifiers && tvVirtualKey == deskVirtualKey)
+        {
+            errorMessage = "TV Gaming Mode and Desk Mode cannot use the same hotkey.";
+            return false;
+        }
+
+        _settings.TvHotkeyCtrl = tvCtrl;
+        _settings.TvHotkeyAlt = tvAlt;
+        _settings.TvHotkeyShift = tvShift;
+        _settings.TvHotkeyWin = tvWin;
+        _settings.TvHotkeyKey = tvKeyNormalized;
+
+        _settings.DeskHotkeyCtrl = deskCtrl;
+        _settings.DeskHotkeyAlt = deskAlt;
+        _settings.DeskHotkeyShift = deskShift;
+        _settings.DeskHotkeyWin = deskWin;
+        _settings.DeskHotkeyKey = deskKeyNormalized;
+
+        return true;
     }
 
     private void ApplyStartupSetting()
@@ -516,6 +676,180 @@ public partial class MainWindow : Window
     private void SetStatus(string message)
     {
         StatusTextBlock.Text = message;
+    }
+
+    private void UpdateHotkeyDisplayText()
+    {
+        TvHotkeyDisplayText.Text = FormatHotkey(
+            _settings.TvHotkeyCtrl,
+            _settings.TvHotkeyAlt,
+            _settings.TvHotkeyShift,
+            _settings.TvHotkeyWin,
+            _settings.TvHotkeyKey
+        );
+
+        DeskHotkeyDisplayText.Text = FormatHotkey(
+            _settings.DeskHotkeyCtrl,
+            _settings.DeskHotkeyAlt,
+            _settings.DeskHotkeyShift,
+            _settings.DeskHotkeyWin,
+            _settings.DeskHotkeyKey
+        );
+    }
+
+    private static string FormatHotkey(bool ctrl, bool alt, bool shift, bool win, string key)
+    {
+        var parts = new List<string>();
+
+        if (ctrl)
+        {
+            parts.Add("Ctrl");
+        }
+
+        if (alt)
+        {
+            parts.Add("Alt");
+        }
+
+        if (shift)
+        {
+            parts.Add("Shift");
+        }
+
+        if (win)
+        {
+            parts.Add("Win");
+        }
+
+        parts.Add(NormalizeKeyLabel(key));
+
+        return string.Join(" + ", parts);
+    }
+
+    private static uint BuildModifierValue(bool ctrl, bool alt, bool shift, bool win)
+    {
+        uint value = 0;
+
+        if (ctrl)
+        {
+            value |= MOD_CONTROL;
+        }
+
+        if (alt)
+        {
+            value |= MOD_ALT;
+        }
+
+        if (shift)
+        {
+            value |= MOD_SHIFT;
+        }
+
+        if (win)
+        {
+            value |= MOD_WIN;
+        }
+
+        return value;
+    }
+
+    private static bool TryGetVirtualKey(string input, out uint virtualKey, out string normalizedKey)
+    {
+        virtualKey = 0;
+        normalizedKey = "";
+
+        string keyText = input.Trim();
+
+        if (string.IsNullOrWhiteSpace(keyText))
+        {
+            return false;
+        }
+
+        keyText = keyText.Replace(" ", "", StringComparison.OrdinalIgnoreCase);
+
+        if (keyText.Length == 1 && char.IsLetter(keyText[0]))
+        {
+            keyText = keyText.ToUpperInvariant();
+        }
+        else if (keyText.Length == 1 && char.IsDigit(keyText[0]))
+        {
+            keyText = "D" + keyText;
+        }
+        else
+        {
+            keyText = NormalizeKeyAlias(keyText);
+        }
+
+        if (!Enum.TryParse(keyText, ignoreCase: true, out Key key))
+        {
+            return false;
+        }
+
+        int vk = KeyInterop.VirtualKeyFromKey(key);
+
+        if (vk <= 0)
+        {
+            return false;
+        }
+
+        virtualKey = (uint)vk;
+        normalizedKey = NormalizeKeyLabel(keyText);
+
+        return true;
+    }
+
+    private static string NormalizeKeyAlias(string keyText)
+    {
+        return keyText.ToUpperInvariant() switch
+        {
+            "ESC" => "Escape",
+            "ENTER" => "Return",
+            "RETURN" => "Return",
+            "SPACEBAR" => "Space",
+            "PGUP" => "PageUp",
+            "PAGEUP" => "PageUp",
+            "PGDN" => "PageDown",
+            "PAGEDOWN" => "PageDown",
+            "DEL" => "Delete",
+            "INS" => "Insert",
+            "LEFT" => "Left",
+            "RIGHT" => "Right",
+            "UP" => "Up",
+            "DOWN" => "Down",
+            _ => keyText
+        };
+    }
+
+    private static string NormalizeKeyLabel(string keyText)
+    {
+        string value = keyText.Trim();
+
+        if (value.StartsWith("D", StringComparison.OrdinalIgnoreCase) &&
+            value.Length == 2 &&
+            char.IsDigit(value[1]))
+        {
+            return value[1].ToString();
+        }
+
+        if (string.Equals(value, "Return", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Enter";
+        }
+
+        return value.ToUpperInvariant() switch
+        {
+            "ESCAPE" => "Escape",
+            "SPACE" => "Space",
+            "PAGEUP" => "PageUp",
+            "PAGEDOWN" => "PageDown",
+            "DELETE" => "Delete",
+            "INSERT" => "Insert",
+            "LEFT" => "Left",
+            "RIGHT" => "Right",
+            "UP" => "Up",
+            "DOWN" => "Down",
+            _ => value.ToUpperInvariant()
+        };
     }
 
     [DllImport("user32.dll")]
