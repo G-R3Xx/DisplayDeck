@@ -23,62 +23,52 @@ public sealed class DisplayModeService
         _settings = settings;
     }
 
-    public async Task SwitchToTvGamingModeAsync()
+    public async Task SwitchToProfileAsync(DisplayModeProfile profile)
     {
         await _nativeDisplaySwitchingService.ApplyProfileAsync(
-            _settings.TvGamingMode,
+            profile,
             _settings.CommandDelayMs
         );
 
-        if (_settings.LaunchAppOnTvMode)
+        await Task.Delay(1000);
+
+        if (profile.CloseLauncherAfterSwitch)
         {
-            LaunchConfiguredApp();
+            CloseConfiguredApp(profile);
+        }
+
+        if (profile.LaunchAppAfterSwitch)
+        {
+            LaunchConfiguredApp(profile);
         }
     }
 
-    public async Task SwitchToDeskModeAsync()
+    private static void LaunchConfiguredApp(DisplayModeProfile profile)
     {
-        await _nativeDisplaySwitchingService.ApplyProfileAsync(
-            _settings.DeskMode,
-            _settings.CommandDelayMs
-        );
-
-        await Task.Delay(1500);
-
-        if (_settings.CloseAppOnDeskMode)
-        {
-            CloseConfiguredApp();
-        }
-    }
-
-    private void LaunchConfiguredApp()
-    {
-        if (string.IsNullOrWhiteSpace(_settings.LauncherPath))
+        if (string.IsNullOrWhiteSpace(profile.LauncherPath))
         {
             return;
         }
 
-        if (!File.Exists(_settings.LauncherPath))
+        if (!File.Exists(profile.LauncherPath))
         {
-            throw new FileNotFoundException("Launcher app was not found.", _settings.LauncherPath);
+            throw new FileNotFoundException("Launcher app was not found.", profile.LauncherPath);
         }
 
-        string processName = GetLauncherProcessName();
+        string processName = GetLauncherProcessName(profile);
 
         if (IsProcessRunning(processName))
         {
             return;
         }
 
-        CommandRunner.StartProcess(_settings.LauncherPath);
+        CommandRunner.StartProcess(profile.LauncherPath);
     }
 
-    private void CloseConfiguredApp()
+    private static void CloseConfiguredApp(DisplayModeProfile profile)
     {
-        var possibleNames = GetPossibleLauncherProcessNames();
+        var possibleNames = GetPossibleLauncherProcessNames(profile);
 
-        // This mimics what Windows does when you right-click the taskbar icon
-        // and choose "Close window".
         CloseMatchingWindowsByMessage(possibleNames);
 
         Task.Delay(2000).Wait();
@@ -88,7 +78,6 @@ public sealed class DisplayModeService
             return;
         }
 
-        // Secondary graceful attempt.
         CloseMatchingProcessesGracefully(possibleNames);
 
         Task.Delay(2000).Wait();
@@ -98,44 +87,42 @@ public sealed class DisplayModeService
             return;
         }
 
-        // Force fallback.
         ForceKillByProcessNames(possibleNames);
 
         Task.Delay(1000).Wait();
 
-        // Final .NET fallback.
         KillMatchingProcessesDotNet(possibleNames);
     }
 
-    private string GetLauncherProcessName()
+    private static string GetLauncherProcessName(DisplayModeProfile profile)
     {
-        if (!string.IsNullOrWhiteSpace(_settings.LauncherProcessName))
+        if (!string.IsNullOrWhiteSpace(profile.LauncherProcessName))
         {
-            return CleanProcessName(_settings.LauncherProcessName);
+            return CleanProcessName(profile.LauncherProcessName);
         }
 
-        if (!string.IsNullOrWhiteSpace(_settings.LauncherPath))
+        if (!string.IsNullOrWhiteSpace(profile.LauncherPath))
         {
-            return Path.GetFileNameWithoutExtension(_settings.LauncherPath);
+            return Path.GetFileNameWithoutExtension(profile.LauncherPath);
         }
 
         return "";
     }
 
-    private List<string> GetPossibleLauncherProcessNames()
+    private static List<string> GetPossibleLauncherProcessNames(DisplayModeProfile profile)
     {
         var names = new List<string>();
 
-        string configuredName = GetLauncherProcessName();
+        string configuredName = GetLauncherProcessName(profile);
 
         if (!string.IsNullOrWhiteSpace(configuredName))
         {
             names.Add(configuredName);
         }
 
-        if (!string.IsNullOrWhiteSpace(_settings.LauncherPath))
+        if (!string.IsNullOrWhiteSpace(profile.LauncherPath))
         {
-            string pathName = Path.GetFileNameWithoutExtension(_settings.LauncherPath);
+            string pathName = Path.GetFileNameWithoutExtension(profile.LauncherPath);
 
             if (!string.IsNullOrWhiteSpace(pathName))
             {

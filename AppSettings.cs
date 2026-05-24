@@ -45,6 +45,10 @@ public sealed class AppSettings
 
     public string SecondaryDisplayName { get; set; } = @"\\.\DISPLAY3";
 
+    public List<DisplayModeProfile> Profiles { get; set; } = new();
+
+    public string SelectedProfileId { get; set; } = "";
+
     public DisplayModeProfile DeskMode { get; set; } = new()
     {
         Name = "Desk Mode",
@@ -78,8 +82,6 @@ public sealed class AppSettings
             {
                 var defaultSettings = new AppSettings();
                 defaultSettings.EnsureProfiles();
-                defaultSettings.EnsureLauncherProcessName();
-                defaultSettings.EnsureHotkeys();
                 return defaultSettings;
             }
 
@@ -87,19 +89,13 @@ public sealed class AppSettings
             var settings = JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
 
             settings.EnsureProfiles();
-            settings.EnsureLauncherProcessName();
-            settings.EnsureHotkeys();
 
             return settings;
         }
         catch
         {
             var fallbackSettings = new AppSettings();
-
             fallbackSettings.EnsureProfiles();
-            fallbackSettings.EnsureLauncherProcessName();
-            fallbackSettings.EnsureHotkeys();
-
             return fallbackSettings;
         }
     }
@@ -107,8 +103,6 @@ public sealed class AppSettings
     public void Save()
     {
         EnsureProfiles();
-        EnsureLauncherProcessName();
-        EnsureHotkeys();
 
         Directory.CreateDirectory(SettingsFolder);
 
@@ -123,82 +117,59 @@ public sealed class AppSettings
 
     public void EnsureProfiles()
     {
-        if (DeskMode is null)
+        if (Profiles is null)
         {
-            DeskMode = new DisplayModeProfile();
+            Profiles = new List<DisplayModeProfile>();
         }
 
-        if (TvGamingMode is null)
+        if (Profiles.Count == 0)
         {
-            TvGamingMode = new DisplayModeProfile();
-        }
-
-        if (DeskMode.EnabledDisplays.Count == 0 && DeskMode.DisabledDisplays.Count == 0)
-        {
-            DeskMode = new DisplayModeProfile
+            Profiles.Add(new DisplayModeProfile
             {
+                Id = "desk-mode",
                 Name = "Desk Mode",
-                PrimaryDisplayName = MainDisplayName,
-                EnabledDisplays = new List<string> { MainDisplayName, SecondaryDisplayName },
-                DisabledDisplays = new List<string> { TvDisplayName }
-            };
-        }
+                PrimaryDisplayName = DeskMode.PrimaryDisplayName,
+                EnabledDisplays = new List<string>(DeskMode.EnabledDisplays),
+                DisabledDisplays = new List<string>(DeskMode.DisabledDisplays),
+                HotkeyCtrl = DeskHotkeyCtrl,
+                HotkeyAlt = DeskHotkeyAlt,
+                HotkeyShift = DeskHotkeyShift,
+                HotkeyWin = DeskHotkeyWin,
+                HotkeyKey = DeskHotkeyKey,
+                LauncherPath = LauncherPath,
+                LauncherProcessName = LauncherProcessName,
+                LaunchAppAfterSwitch = false,
+                CloseLauncherAfterSwitch = CloseAppOnDeskMode
+            });
 
-        if (TvGamingMode.EnabledDisplays.Count == 0 && TvGamingMode.DisabledDisplays.Count == 0)
-        {
-            TvGamingMode = new DisplayModeProfile
+            Profiles.Add(new DisplayModeProfile
             {
+                Id = "tv-gaming-mode",
                 Name = "TV Gaming Mode",
-                PrimaryDisplayName = TvDisplayName,
-                EnabledDisplays = new List<string> { TvDisplayName },
-                DisabledDisplays = new List<string> { MainDisplayName, SecondaryDisplayName }
-            };
+                PrimaryDisplayName = TvGamingMode.PrimaryDisplayName,
+                EnabledDisplays = new List<string>(TvGamingMode.EnabledDisplays),
+                DisabledDisplays = new List<string>(TvGamingMode.DisabledDisplays),
+                HotkeyCtrl = TvHotkeyCtrl,
+                HotkeyAlt = TvHotkeyAlt,
+                HotkeyShift = TvHotkeyShift,
+                HotkeyWin = TvHotkeyWin,
+                HotkeyKey = TvHotkeyKey,
+                LauncherPath = LauncherPath,
+                LauncherProcessName = LauncherProcessName,
+                LaunchAppAfterSwitch = LaunchAppOnTvMode,
+                CloseLauncherAfterSwitch = false
+            });
         }
-    }
 
-    public void EnsureLauncherProcessName()
-    {
-        if (!string.IsNullOrWhiteSpace(LauncherProcessName))
+        for (int i = 0; i < Profiles.Count; i++)
         {
-            LauncherProcessName = LauncherProcessName
-                .Replace(".exe", "", StringComparison.OrdinalIgnoreCase)
-                .Trim();
-
-            return;
+            Profiles[i].EnsureDefaults($"Profile {i + 1}");
         }
 
-        if (!string.IsNullOrWhiteSpace(LauncherPath))
+        if (string.IsNullOrWhiteSpace(SelectedProfileId) ||
+            !Profiles.Exists(profile => string.Equals(profile.Id, SelectedProfileId, StringComparison.OrdinalIgnoreCase)))
         {
-            LauncherProcessName = Path.GetFileNameWithoutExtension(LauncherPath);
+            SelectedProfileId = Profiles.Count > 0 ? Profiles[0].Id : "";
         }
-    }
-
-    public void EnsureHotkeys()
-    {
-        if (string.IsNullOrWhiteSpace(TvHotkeyKey))
-        {
-            TvHotkeyKey = "G";
-        }
-
-        if (!TvHotkeyCtrl && !TvHotkeyAlt && !TvHotkeyShift && !TvHotkeyWin)
-        {
-            TvHotkeyCtrl = true;
-            TvHotkeyAlt = true;
-        }
-
-        TvHotkeyKey = TvHotkeyKey.Trim().ToUpperInvariant();
-
-        if (string.IsNullOrWhiteSpace(DeskHotkeyKey))
-        {
-            DeskHotkeyKey = "D";
-        }
-
-        if (!DeskHotkeyCtrl && !DeskHotkeyAlt && !DeskHotkeyShift && !DeskHotkeyWin)
-        {
-            DeskHotkeyCtrl = true;
-            DeskHotkeyAlt = true;
-        }
-
-        DeskHotkeyKey = DeskHotkeyKey.Trim().ToUpperInvariant();
     }
 }

@@ -61,29 +61,21 @@
             </Setter>
         </Style>
 
-        <Style x:Key="BigTvModeButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+        <Style x:Key="PrimarySaveButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Width" Value="160"/>
+            <Setter Property="Height" Value="46"/>
+            <Setter Property="Background" Value="#2563EB"/>
+            <Setter Property="BorderBrush" Value="#1D4ED8"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontSize" Value="15"/>
+        </Style>
+
+        <Style x:Key="BigSwitchButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
             <Setter Property="Height" Value="132"/>
             <Setter Property="FontSize" Value="28"/>
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="Background" Value="#2563EB"/>
             <Setter Property="BorderBrush" Value="#1D4ED8"/>
-        </Style>
-
-        <Style x:Key="BigDeskModeButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Height" Value="132"/>
-            <Setter Property="FontSize" Value="28"/>
-            <Setter Property="Foreground" Value="#0F172A"/>
-            <Setter Property="Background" Value="#E2E8F0"/>
-            <Setter Property="BorderBrush" Value="#CBD5E1"/>
-        </Style>
-
-        <Style x:Key="KeyCap" TargetType="Border">
-            <Setter Property="Background" Value="#FFFFFF"/>
-            <Setter Property="BorderBrush" Value="#CBD5E1"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="8"/>
-            <Setter Property="Padding" Value="14,8"/>
-            <Setter Property="Margin" Value="0,0,8,0"/>
         </Style>
 
         <Style TargetType="TextBox">
@@ -99,6 +91,42 @@
             <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
             <Setter Property="FontSize" Value="14"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+
+        <Style TargetType="ListBox">
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+
+        <Style TargetType="ListBoxItem">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0,0,14,14"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="ItemBorder"
+                                Background="#F8FAFC"
+                                BorderBrush="#D8E1EC"
+                                BorderThickness="1"
+                                CornerRadius="22"
+                                Padding="18">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#DBEAFE"/>
+                                <Setter TargetName="ItemBorder" Property="BorderBrush" Value="#2563EB"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ItemBorder" Property="BorderBrush" Value="#93C5FD"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
     </Window.Resources>
 
@@ -122,6 +150,7 @@
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
+            <!-- HERO -->
             <Border Grid.Row="0"
                     Background="{StaticResource CardBackground}"
                     BorderBrush="{StaticResource CardBorder}"
@@ -135,7 +164,7 @@
                                FontSize="44"
                                FontWeight="Bold"/>
 
-                    <TextBlock Text="Switch your PC between desk monitors and TV gaming mode."
+                    <TextBlock Text="Switch your PC between custom display profiles."
                                Foreground="{StaticResource TextSecondary}"
                                FontSize="18"
                                Margin="0,8,0,0"/>
@@ -153,7 +182,7 @@
                                        FontSize="20"
                                        FontWeight="Bold"/>
 
-                            <TextBlock Text="Before saving your modes, turn on and connect every display you want to use, including the TV. DisplayDeck only shows active displays during setup so inactive virtual or phantom displays stay hidden."
+                            <TextBlock Text="Before saving profiles, turn on and connect every display you want to use, including TVs. DisplayDeck only shows active displays during setup so inactive virtual or phantom displays stay hidden."
                                        Foreground="#78350F"
                                        FontSize="15"
                                        TextWrapping="Wrap"
@@ -163,54 +192,122 @@
                 </StackPanel>
             </Border>
 
-            <Grid Grid.Row="2">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="22"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
+            <!-- PROFILE SWITCHER -->
+            <Border Grid.Row="2"
+                    Background="{StaticResource CardBackground}"
+                    BorderBrush="{StaticResource CardBorder}"
+                    BorderThickness="1"
+                    CornerRadius="28"
+                    Padding="24">
 
-                <Button Grid.Column="0"
-                        x:Name="TvModeButton"
-                        Style="{StaticResource BigTvModeButton}"
-                        Click="TvModeButton_Click">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="18"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="18"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
 
-                    <StackPanel>
-                        <TextBlock Text="TV Gaming Mode"
-                                   Foreground="White"
-                                   FontSize="31"
-                                   FontWeight="Bold"
-                                   HorizontalAlignment="Center"/>
+                    <DockPanel Grid.Row="0">
+                        <StackPanel DockPanel.Dock="Left">
+                            <TextBlock Text="Display Profiles"
+                                       Foreground="{StaticResource TextPrimary}"
+                                       FontSize="26"
+                                       FontWeight="Bold"/>
 
-                        <TextBlock Text="Switch to TV + launch app"
-                                   Foreground="#DBEAFE"
-                                   FontSize="15"
-                                   HorizontalAlignment="Center"
-                                   Margin="0,8,0,0"/>
-                    </StackPanel>
-                </Button>
+                            <TextBlock Text="Select a profile, edit its setup, then switch using the big button, tray menu, or hotkey."
+                                       Foreground="{StaticResource TextMuted}"
+                                       FontSize="14"
+                                       Margin="0,4,0,0"/>
+                        </StackPanel>
 
-                <Button Grid.Column="2"
-                        x:Name="DeskModeButton"
-                        Style="{StaticResource BigDeskModeButton}"
-                        Click="DeskModeButton_Click">
+                        <StackPanel Orientation="Horizontal"
+                                    HorizontalAlignment="Right"
+                                    DockPanel.Dock="Right">
 
-                    <StackPanel>
-                        <TextBlock Text="Desk Mode"
-                                   Foreground="#0F172A"
-                                   FontSize="31"
-                                   FontWeight="Bold"
-                                   HorizontalAlignment="Center"/>
+                            <Button Content="Add Profile"
+                                    Width="130"
+                                    Height="42"
+                                    Margin="0,0,10,0"
+                                    Click="AddProfileButton_Click"/>
 
-                        <TextBlock Text="Return to desktop monitors"
-                                   Foreground="#475569"
-                                   FontSize="15"
-                                   HorizontalAlignment="Center"
-                                   Margin="0,8,0,0"/>
-                    </StackPanel>
-                </Button>
-            </Grid>
+                            <Button Content="Delete"
+                                    Width="95"
+                                    Height="42"
+                                    Click="DeleteProfileButton_Click"/>
+                        </StackPanel>
+                    </DockPanel>
 
+                    <ListBox Grid.Row="2"
+                             x:Name="ProfilesListBox"
+                             SelectionChanged="ProfilesListBox_SelectionChanged"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+
+                        <ListBox.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel/>
+                            </ItemsPanelTemplate>
+                        </ListBox.ItemsPanel>
+
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Width="255">
+                                    <TextBlock Text="{Binding Name}"
+                                               Foreground="{StaticResource TextPrimary}"
+                                               FontSize="18"
+                                               FontWeight="Bold"
+                                               TextWrapping="Wrap"/>
+
+                                    <TextBlock Text="{Binding PrimaryDisplayName, StringFormat=Primary: {0}}"
+                                               Foreground="{StaticResource TextMuted}"
+                                               FontSize="12"
+                                               TextWrapping="Wrap"
+                                               Margin="0,7,0,0"/>
+
+                                    <Border Background="#FFFFFF"
+                                            BorderBrush="#CBD5E1"
+                                            BorderThickness="1"
+                                            CornerRadius="8"
+                                            Padding="10,6"
+                                            HorizontalAlignment="Left"
+                                            Margin="0,10,0,0">
+
+                                        <TextBlock Text="{Binding HotkeyDisplay, StringFormat=Hotkey: {0}}"
+                                                   Foreground="{StaticResource AccentBlue}"
+                                                   FontSize="13"
+                                                   FontWeight="Bold"/>
+                                    </Border>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <Button Grid.Row="4"
+                            x:Name="SwitchSelectedProfileButton"
+                            Style="{StaticResource BigSwitchButton}"
+                            Click="SwitchSelectedProfileButton_Click">
+
+                        <StackPanel>
+                            <TextBlock x:Name="SwitchSelectedProfileButtonTitle"
+                                       Text="Switch Selected Profile"
+                                       Foreground="White"
+                                       FontSize="31"
+                                       FontWeight="Bold"
+                                       HorizontalAlignment="Center"/>
+
+                            <TextBlock x:Name="SwitchSelectedProfileButtonSubtitle"
+                                       Text="Applies the selected display layout"
+                                       Foreground="#DBEAFE"
+                                       FontSize="15"
+                                       HorizontalAlignment="Center"
+                                       Margin="0,8,0,0"/>
+                        </StackPanel>
+                    </Button>
+                </Grid>
+            </Border>
+
+            <!-- SWITCHING DELAY NOTICE -->
             <Border Grid.Row="4"
                     Background="#EEF6FF"
                     BorderBrush="#BFDBFE"
@@ -224,7 +321,7 @@
                                FontSize="18"
                                FontWeight="Bold"/>
 
-                    <TextBlock Text="When changing modes, your screens may flicker, go black, move around, or take a few seconds to settle while Windows applies the new monitor layout."
+                    <TextBlock Text="When changing profiles, your screens may flicker, go black, move around, or take a few seconds to settle while Windows applies the new monitor layout."
                                Foreground="#1E40AF"
                                FontSize="14.5"
                                TextWrapping="Wrap"
@@ -232,6 +329,7 @@
                 </StackPanel>
             </Border>
 
+            <!-- SELECTED PROFILE + HOTKEY EDITOR -->
             <Border Grid.Row="6"
                     Background="{StaticResource CardBackground}"
                     BorderBrush="{StaticResource CardBorder}"
@@ -239,99 +337,139 @@
                     CornerRadius="26"
                     Padding="24">
 
-                <StackPanel>
-                    <TextBlock Text="Keyboard Shortcuts"
-                               Foreground="{StaticResource TextPrimary}"
-                               FontSize="24"
-                               FontWeight="Bold"/>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="220"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
 
-                    <TextBlock Text="Use these anywhere in Windows while DisplayDeck is running."
-                               Foreground="{StaticResource TextMuted}"
-                               FontSize="14"
-                               Margin="0,4,0,18"/>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="18"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="18"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="18"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="20"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
 
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="22"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Row="0" Grid.ColumnSpan="2">
+                        <TextBlock Text="Selected Profile"
+                                   Foreground="{StaticResource TextPrimary}"
+                                   FontSize="24"
+                                   FontWeight="Bold"/>
 
-                        <Border Grid.Column="0"
-                                Background="#F8FAFC"
-                                BorderBrush="#D8E1EC"
-                                BorderThickness="1"
-                                CornerRadius="22"
-                                Padding="20">
+                        <TextBlock Text="Rename the selected profile and set its shortcut keys."
+                                   Foreground="{StaticResource TextMuted}"
+                                   FontSize="14"
+                                   Margin="0,4,0,0"/>
+                    </StackPanel>
 
-                            <StackPanel>
-                                <TextBlock Text="Switch to TV Gaming Mode"
-                                           Foreground="#1E3A8A"
-                                           FontSize="18"
-                                           FontWeight="Bold"/>
+                    <TextBlock Grid.Row="2"
+                               Grid.Column="0"
+                               Text="Profile name"
+                               Foreground="{StaticResource TextSecondary}"
+                               VerticalAlignment="Center"/>
 
-                                <Border Background="#FFFFFF"
-                                        BorderBrush="#CBD5E1"
-                                        BorderThickness="1"
-                                        CornerRadius="10"
-                                        Padding="16,10"
-                                        HorizontalAlignment="Left"
+                    <TextBox Grid.Row="2"
+                             Grid.Column="1"
+                             x:Name="SelectedProfileNameBox"/>
+
+                    <TextBlock Grid.Row="4"
+                               Grid.Column="0"
+                               Text="Current hotkey"
+                               Foreground="{StaticResource TextSecondary}"
+                               VerticalAlignment="Center"/>
+
+                    <Border Grid.Row="4"
+                            Grid.Column="1"
+                            Background="#F8FAFC"
+                            BorderBrush="#D8E1EC"
+                            BorderThickness="1"
+                            CornerRadius="12"
+                            Padding="14,9"
+                            HorizontalAlignment="Left">
+
+                        <TextBlock x:Name="SelectedProfileHotkeyDisplayText"
+                                   Text="No hotkey set"
+                                   Foreground="{StaticResource AccentBlue}"
+                                   FontSize="22"
+                                   FontWeight="Bold"/>
+                    </Border>
+
+                    <TextBlock Grid.Row="6"
+                               Grid.Column="0"
+                               Text="Edit hotkey"
+                               Foreground="{StaticResource TextSecondary}"
+                               VerticalAlignment="Center"/>
+
+                    <Border Grid.Row="6"
+                            Grid.Column="1"
+                            Background="#F8FAFC"
+                            BorderBrush="#D8E1EC"
+                            BorderThickness="1"
+                            CornerRadius="18"
+                            Padding="18">
+
+                        <StackPanel>
+                            <TextBlock Text="Tick modifiers, then type the key"
+                                       Foreground="{StaticResource TextPrimary}"
+                                       FontSize="16"
+                                       FontWeight="Bold"/>
+
+                            <StackPanel Orientation="Horizontal"
                                         Margin="0,14,0,0">
 
-                                    <TextBlock x:Name="TvHotkeyDisplayText"
-                                               Text="Ctrl + Alt + G"
-                                               Foreground="{StaticResource AccentBlue}"
-                                               FontSize="24"
-                                               FontWeight="Bold"/>
-                                </Border>
+                                <CheckBox x:Name="HotkeyCtrlCheckBox"
+                                          Content="Ctrl"
+                                          Margin="0,0,14,0"/>
 
-                                <TextBlock Text="Activates the TV profile and opens the selected launcher app."
+                                <CheckBox x:Name="HotkeyAltCheckBox"
+                                          Content="Alt"
+                                          Margin="0,0,14,0"/>
+
+                                <CheckBox x:Name="HotkeyShiftCheckBox"
+                                          Content="Shift"
+                                          Margin="0,0,14,0"/>
+
+                                <CheckBox x:Name="HotkeyWinCheckBox"
+                                          Content="Win"
+                                          Margin="0,0,20,0"/>
+
+                                <TextBlock Text="Key:"
                                            Foreground="{StaticResource TextSecondary}"
-                                           FontSize="14"
-                                           TextWrapping="Wrap"
-                                           Margin="0,14,0,0"/>
+                                           VerticalAlignment="Center"
+                                           Margin="0,0,8,0"/>
+
+                                <TextBox x:Name="HotkeyKeyBox"
+                                         Width="84"
+                                         HorizontalContentAlignment="Center"
+                                         FontWeight="Bold"/>
                             </StackPanel>
-                        </Border>
 
-                        <Border Grid.Column="2"
-                                Background="#F8FAFC"
-                                BorderBrush="#D8E1EC"
-                                BorderThickness="1"
-                                CornerRadius="22"
-                                Padding="20">
+                            <TextBlock Text="Example: Ctrl + Alt + D = tick Ctrl and Alt, then type D."
+                                       Foreground="{StaticResource TextMuted}"
+                                       FontSize="13"
+                                       TextWrapping="Wrap"
+                                       Margin="0,12,0,0"/>
+                        </StackPanel>
+                    </Border>
 
-                            <StackPanel>
-                                <TextBlock Text="Switch to Desk Mode"
-                                           Foreground="#334155"
-                                           FontSize="18"
-                                           FontWeight="Bold"/>
+                    <StackPanel Grid.Row="8"
+                                Grid.Column="1"
+                                Orientation="Horizontal"
+                                HorizontalAlignment="Right">
 
-                                <Border Background="#FFFFFF"
-                                        BorderBrush="#CBD5E1"
-                                        BorderThickness="1"
-                                        CornerRadius="10"
-                                        Padding="16,10"
-                                        HorizontalAlignment="Left"
-                                        Margin="0,14,0,0">
-
-                                    <TextBlock x:Name="DeskHotkeyDisplayText"
-                                               Text="Ctrl + Alt + D"
-                                               Foreground="#334155"
-                                               FontSize="24"
-                                               FontWeight="Bold"/>
-                                </Border>
-
-                                <TextBlock Text="Returns to desk displays and closes the launcher app if enabled."
-                                           Foreground="{StaticResource TextSecondary}"
-                                           FontSize="14"
-                                           TextWrapping="Wrap"
-                                           Margin="0,14,0,0"/>
-                            </StackPanel>
-                        </Border>
-                    </Grid>
-                </StackPanel>
+                        <Button Content="Save Profile"
+                                Style="{StaticResource PrimarySaveButton}"
+                                Click="SaveSettingsButton_Click"/>
+                    </StackPanel>
+                </Grid>
             </Border>
 
+            <!-- DETECTED DISPLAYS -->
             <Border Grid.Row="8"
                     Background="{StaticResource CardBackground}"
                     BorderBrush="{StaticResource CardBorder}"
@@ -441,6 +579,7 @@
                 </StackPanel>
             </Border>
 
+            <!-- PROFILE DISPLAY BUILDER -->
             <Border Grid.Row="10"
                     Background="{StaticResource CardBackground}"
                     BorderBrush="{StaticResource CardBorder}"
@@ -449,15 +588,31 @@
                     Padding="24">
 
                 <StackPanel>
-                    <TextBlock Text="Mode Builder"
+                    <TextBlock Text="Profile Display Setup"
                                Foreground="{StaticResource TextPrimary}"
                                FontSize="24"
                                FontWeight="Bold"/>
 
-                    <TextBlock Text="Choose which displays are enabled and which one is primary for each mode."
-                               Foreground="{StaticResource TextMuted}"
-                               FontSize="14"
-                               Margin="0,4,0,0"/>
+                    <StackPanel Margin="0,4,0,0">
+    <TextBlock Text="Choose which displays are enabled and which one is primary for the selected profile."
+               Foreground="{StaticResource TextMuted}"
+               FontSize="14"/>
+
+    <Border Background="#DBEAFE"
+            BorderBrush="#93C5FD"
+            BorderThickness="1"
+            CornerRadius="12"
+            Padding="12,7"
+            HorizontalAlignment="Left"
+            Margin="0,12,0,0">
+
+        <TextBlock x:Name="ProfileDisplaySetupEditingText"
+                   Text="Currently editing: Selected Profile"
+                   Foreground="#1E3A8A"
+                   FontSize="15"
+                   FontWeight="Bold"/>
+    </Border>
+</StackPanel>
 
                     <Border Background="#F8FAFC"
                             BorderBrush="#D8E1EC"
@@ -466,144 +621,67 @@
                             Padding="16"
                             Margin="0,18,0,18">
 
-                        <TextBlock Text="Tip: Set Desk Mode with your main and secondary monitors on, and TV Gaming Mode with only the TV on."
+                        <TextBlock Text="Tip: Each profile needs at least one enabled display, and its primary display must also be enabled."
                                    Foreground="{StaticResource TextSecondary}"
                                    FontSize="14"
                                    TextWrapping="Wrap"/>
                     </Border>
 
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="22"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
+                    <ItemsControl x:Name="ProfileDisplaysItemsControl">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="#F8FAFC"
+                                        BorderBrush="#D8E1EC"
+                                        BorderThickness="1"
+                                        CornerRadius="20"
+                                        Padding="16"
+                                        Margin="0,0,0,12">
 
-                        <Border Grid.Column="0"
-                                Background="#F8FAFC"
-                                BorderBrush="#CBD5E1"
-                                BorderThickness="1"
-                                CornerRadius="24"
-                                Padding="20">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="260"/>
+                                        </Grid.ColumnDefinitions>
 
-                            <StackPanel>
-                                <TextBlock Text="Desk Mode Setup"
-                                           Foreground="{StaticResource TextPrimary}"
-                                           FontSize="21"
-                                           FontWeight="Bold"/>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="{Binding MonitorName}"
+                                                       Foreground="{StaticResource TextPrimary}"
+                                                       FontSize="17"
+                                                       FontWeight="Bold"
+                                                       TextWrapping="Wrap"/>
 
-                                <TextBlock Text="Select the displays used at your desk."
-                                           Foreground="{StaticResource TextMuted}"
-                                           FontSize="13"
-                                           Margin="0,4,0,16"/>
+                                            <TextBlock Text="{Binding DisplayName}"
+                                                       Foreground="{StaticResource TextMuted}"
+                                                       FontSize="12"
+                                                       Margin="0,4,0,0"/>
 
-                                <ItemsControl x:Name="ModeBuilderDataGrid">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Border Background="#FFFFFF"
-                                                    BorderBrush="#E2E8F0"
-                                                    BorderThickness="1"
-                                                    CornerRadius="18"
-                                                    Padding="14"
-                                                    Margin="0,0,0,12">
+                                            <TextBlock Text="{Binding ResolutionText}"
+                                                       Foreground="{StaticResource TextSecondary}"
+                                                       FontSize="12"
+                                                       Margin="0,4,0,0"/>
+                                        </StackPanel>
 
-                                                <StackPanel>
-                                                    <TextBlock Text="{Binding MonitorName}"
-                                                               Foreground="{StaticResource TextPrimary}"
-                                                               FontSize="16"
-                                                               FontWeight="Bold"
-                                                               TextWrapping="Wrap"/>
+                                        <StackPanel Grid.Column="1"
+                                                    Orientation="Horizontal"
+                                                    HorizontalAlignment="Right"
+                                                    VerticalAlignment="Center">
 
-                                                    <TextBlock Text="{Binding DisplayName}"
-                                                               Foreground="{StaticResource TextMuted}"
-                                                               FontSize="12"
-                                                               Margin="0,3,0,0"/>
+                                            <CheckBox Content="Enabled"
+                                                      IsChecked="{Binding Enabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                      Margin="0,0,20,0"/>
 
-                                                    <TextBlock Text="{Binding ResolutionText}"
-                                                               Foreground="{StaticResource TextSecondary}"
-                                                               FontSize="12"
-                                                               Margin="0,3,0,10"/>
-
-                                                    <StackPanel Orientation="Horizontal">
-                                                        <CheckBox Content="Enabled"
-                                                                  IsChecked="{Binding DeskEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                                  Margin="0,0,18,0"/>
-
-                                                        <CheckBox Content="Primary"
-                                                                  IsChecked="{Binding DeskPrimary, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-                                                    </StackPanel>
-                                                </StackPanel>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </StackPanel>
-                        </Border>
-
-                        <Border Grid.Column="2"
-                                Background="{StaticResource AccentBlueSoft}"
-                                BorderBrush="#93C5FD"
-                                BorderThickness="1"
-                                CornerRadius="24"
-                                Padding="20">
-
-                            <StackPanel>
-                                <TextBlock Text="TV Gaming Mode Setup"
-                                           Foreground="#1E3A8A"
-                                           FontSize="21"
-                                           FontWeight="Bold"/>
-
-                                <TextBlock Text="Select the display used for TV gaming."
-                                           Foreground="#1E40AF"
-                                           FontSize="13"
-                                           Margin="0,4,0,16"/>
-
-                                <ItemsControl ItemsSource="{Binding ItemsSource, ElementName=ModeBuilderDataGrid}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Border Background="#FFFFFF"
-                                                    BorderBrush="#BFDBFE"
-                                                    BorderThickness="1"
-                                                    CornerRadius="18"
-                                                    Padding="14"
-                                                    Margin="0,0,0,12">
-
-                                                <StackPanel>
-                                                    <TextBlock Text="{Binding MonitorName}"
-                                                               Foreground="{StaticResource TextPrimary}"
-                                                               FontSize="16"
-                                                               FontWeight="Bold"
-                                                               TextWrapping="Wrap"/>
-
-                                                    <TextBlock Text="{Binding DisplayName}"
-                                                               Foreground="{StaticResource TextMuted}"
-                                                               FontSize="12"
-                                                               Margin="0,3,0,0"/>
-
-                                                    <TextBlock Text="{Binding ResolutionText}"
-                                                               Foreground="{StaticResource TextSecondary}"
-                                                               FontSize="12"
-                                                               Margin="0,3,0,10"/>
-
-                                                    <StackPanel Orientation="Horizontal">
-                                                        <CheckBox Content="Enabled"
-                                                                  IsChecked="{Binding TvEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                                  Margin="0,0,18,0"/>
-
-                                                        <CheckBox Content="Primary"
-                                                                  IsChecked="{Binding TvPrimary, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-                                                    </StackPanel>
-                                                </StackPanel>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </StackPanel>
-                        </Border>
-                    </Grid>
+                                            <CheckBox Content="Primary"
+                                                      IsChecked="{Binding Primary, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
                 </StackPanel>
             </Border>
 
+            <!-- PROFILE SETTINGS -->
             <Border Grid.Row="12"
                     Background="{StaticResource CardBackground}"
                     BorderBrush="{StaticResource CardBorder}"
@@ -628,17 +706,15 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="20"/>
                         <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="20"/>
-                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
                     <StackPanel Grid.Row="0" Grid.ColumnSpan="3">
-                        <TextBlock Text="Launcher Settings"
+                        <TextBlock Text="Launcher and Startup Settings"
                                    Foreground="{StaticResource TextPrimary}"
                                    FontSize="24"
                                    FontWeight="Bold"/>
 
-                        <TextBlock Text="Choose an optional app to open in TV Gaming Mode and close in Desk Mode."
+                        <TextBlock Text="Set optional launcher actions for the selected profile."
                                    Foreground="{StaticResource TextMuted}"
                                    FontSize="14"
                                    Margin="0,4,0,0"/>
@@ -671,124 +747,40 @@
                              Grid.ColumnSpan="2"
                              x:Name="LauncherProcessNameBox"/>
 
-                    <Border Grid.Row="6"
-                            Grid.ColumnSpan="3"
-                            Background="#F8FAFC"
-                            BorderBrush="#D8E1EC"
-                            BorderThickness="1"
-                            CornerRadius="20"
-                            Padding="18">
-
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="22"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-
-                            <StackPanel Grid.Column="0">
-                                <TextBlock Text="TV Gaming Mode Hotkey"
-                                           Foreground="#1E3A8A"
-                                           FontSize="17"
-                                           FontWeight="Bold"/>
-
-                                <StackPanel Orientation="Horizontal"
-                                            Margin="0,12,0,0">
-
-                                    <CheckBox x:Name="TvHotkeyCtrlCheckBox"
-                                              Content="Ctrl"
-                                              Margin="0,0,12,0"/>
-
-                                    <CheckBox x:Name="TvHotkeyAltCheckBox"
-                                              Content="Alt"
-                                              Margin="0,0,12,0"/>
-
-                                    <CheckBox x:Name="TvHotkeyShiftCheckBox"
-                                              Content="Shift"
-                                              Margin="0,0,12,0"/>
-
-                                    <CheckBox x:Name="TvHotkeyWinCheckBox"
-                                              Content="Win"
-                                              Margin="0,0,12,0"/>
-
-                                    <TextBox x:Name="TvHotkeyKeyBox"
-                                             Width="72"
-                                             HorizontalContentAlignment="Center"
-                                             FontWeight="Bold"/>
-                                </StackPanel>
-                            </StackPanel>
-
-                            <StackPanel Grid.Column="2">
-                                <TextBlock Text="Desk Mode Hotkey"
-                                           Foreground="#334155"
-                                           FontSize="17"
-                                           FontWeight="Bold"/>
-
-                                <StackPanel Orientation="Horizontal"
-                                            Margin="0,12,0,0">
-
-                                    <CheckBox x:Name="DeskHotkeyCtrlCheckBox"
-                                              Content="Ctrl"
-                                              Margin="0,0,12,0"/>
-
-                                    <CheckBox x:Name="DeskHotkeyAltCheckBox"
-                                              Content="Alt"
-                                              Margin="0,0,12,0"/>
-
-                                    <CheckBox x:Name="DeskHotkeyShiftCheckBox"
-                                              Content="Shift"
-                                              Margin="0,0,12,0"/>
-
-                                    <CheckBox x:Name="DeskHotkeyWinCheckBox"
-                                              Content="Win"
-                                              Margin="0,0,12,0"/>
-
-                                    <TextBox x:Name="DeskHotkeyKeyBox"
-                                             Width="72"
-                                             HorizontalContentAlignment="Center"
-                                             FontWeight="Bold"/>
-                                </StackPanel>
-                            </StackPanel>
-                        </Grid>
-                    </Border>
-
-                    <StackPanel Grid.Row="8"
+                    <StackPanel Grid.Row="6"
                                 Grid.Column="1"
                                 Grid.ColumnSpan="2"
                                 Orientation="Horizontal"
                                 HorizontalAlignment="Right">
 
-                        <CheckBox x:Name="LaunchAppCheckBox"
-                                  Content="Launch app on TV Mode"
+                        <CheckBox x:Name="LaunchAppAfterSwitchCheckBox"
+                                  Content="Launch app after switching"
                                   Margin="0,0,20,0"/>
 
-                        <CheckBox x:Name="CloseAppCheckBox"
-                                  Content="Close app on Desk Mode"
+                        <CheckBox x:Name="CloseLauncherAfterSwitchCheckBox"
+                                  Content="Close launcher after switching"
                                   Margin="0,0,20,0"/>
 
                         <CheckBox x:Name="StartWithWindowsCheckBox"
                                   Content="Start with Windows"
                                   Margin="0,0,20,0"/>
 
-                        <Button Content="Save Settings"
-                                Width="150"
-                                Height="42"
-                                Background="#2563EB"
-                                BorderBrush="#1D4ED8"
-                                Foreground="White"
+                        <Button Content="Save Profile"
+                                Style="{StaticResource PrimarySaveButton}"
                                 Click="SaveSettingsButton_Click"/>
                     </StackPanel>
 
-                    <TextBlock Grid.Row="10"
+                    <TextBlock Grid.Row="8"
                                Grid.Column="1"
                                Grid.ColumnSpan="2"
                                Foreground="{StaticResource TextMuted}"
                                FontSize="13"
                                TextWrapping="Wrap"
-                               Text="Hotkey keys can be letters, numbers, function keys such as F8, or common keys such as Enter, Space, Escape, Home, End, PageUp, and PageDown."/>
+                               Text="Launcher actions are per-profile. For example, a TV profile can launch a gaming app, while a Desk profile can close it."/>
                 </Grid>
             </Border>
 
+            <!-- STATUS -->
             <Border Grid.Row="14"
                     Background="{StaticResource CardBackground}"
                     BorderBrush="{StaticResource CardBorder}"

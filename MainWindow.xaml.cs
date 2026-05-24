@@ -18,9 +18,7 @@ public partial class MainWindow : Window
     private const string StartupRegistryKeyPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
     private const string StartupAppName = "DisplayDeck";
 
-    private const int HOTKEY_ID_TV_MODE = 9001;
-    private const int HOTKEY_ID_DESK_MODE = 9002;
-
+    private const int HOTKEY_ID_BASE = 9100;
     private const int WM_HOTKEY = 0x0312;
 
     private const uint MOD_ALT = 0x0001;
@@ -34,15 +32,17 @@ public partial class MainWindow : Window
     private readonly NativeDisplayDiscoveryService _displayDiscoveryService = new();
 
     private List<DisplayInfo> _detectedDisplays = new();
-    private List<ModeDisplaySelection> _modeSelections = new();
+    private List<ProfileDisplaySelection> _profileDisplaySelections = new();
 
     private HwndSource? _hwndSource;
     private Forms.NotifyIcon? _trayIcon;
 
+    private readonly Dictionary<int, string> _hotkeyProfileMap = new();
+
     private bool _isSwitching;
     private bool _isExitRequested;
     private bool _hasShownTrayMessage;
-    private bool _hotkeysRegistered;
+    private bool _isLoadingProfile;
 
     public MainWindow()
     {
@@ -60,7 +60,7 @@ public partial class MainWindow : Window
 
         LoadSettingsIntoUi();
         LoadDetectedDisplays();
-        UpdateHotkeyDisplayText();
+        LoadProfilesIntoUi();
     }
 
     private void MainWindow_SourceInitialized(object? sender, EventArgs e)
@@ -95,11 +95,18 @@ public partial class MainWindow : Window
         var openItem = new Forms.ToolStripMenuItem("Open DisplayDeck");
         openItem.Click += (_, _) => ShowMainWindow();
 
-        var tvModeItem = new Forms.ToolStripMenuItem("Switch to TV Gaming Mode");
-        tvModeItem.Click += async (_, _) => await SwitchToTvModeFromHotkeyAsync();
+        menu.Items.Add(openItem);
+        menu.Items.Add(new Forms.ToolStripSeparator());
 
-        var deskModeItem = new Forms.ToolStripMenuItem("Switch to Desk Mode");
-        deskModeItem.Click += async (_, _) => await SwitchToDeskModeFromHotkeyAsync();
+        foreach (DisplayModeProfile profile in _settings.Profiles)
+        {
+            var profileItem = new Forms.ToolStripMenuItem("Switch to " + profile.Name);
+            string profileId = profile.Id;
+            profileItem.Click += async (_, _) => await SwitchToProfileByIdAsync(profileId);
+            menu.Items.Add(profileItem);
+        }
+
+        menu.Items.Add(new Forms.ToolStripSeparator());
 
         var exitItem = new Forms.ToolStripMenuItem("Exit DisplayDeck");
         exitItem.Click += (_, _) =>
@@ -108,14 +115,19 @@ public partial class MainWindow : Window
             Close();
         };
 
-        menu.Items.Add(openItem);
-        menu.Items.Add(new Forms.ToolStripSeparator());
-        menu.Items.Add(tvModeItem);
-        menu.Items.Add(deskModeItem);
-        menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add(exitItem);
 
         return menu;
+    }
+
+    private void RefreshTrayMenu()
+    {
+        if (_trayIcon is null)
+        {
+            return;
+        }
+
+        _trayIcon.ContextMenuStrip = BuildTrayMenu();
     }
 
     private void MainWindow_StateChanged(object? sender, EventArgs e)
@@ -146,7 +158,7 @@ public partial class MainWindow : Window
             _trayIcon.ShowBalloonTip(
                 2500,
                 "DisplayDeck is still running",
-                "Use the tray icon or hotkeys to switch modes. Right-click the tray icon to exit.",
+                "Use the tray icon or hotkeys to switch profiles. Right-click the tray icon to exit.",
                 Forms.ToolTipIcon.Info
             );
 
@@ -181,151 +193,279 @@ public partial class MainWindow : Window
         }
     }
 
-    private void RegisterConfiguredHotkeys()
+    private void LoadSettingsIntoUi()
     {
-        var helper = new WindowInteropHelper(this);
-
-        if (helper.Handle == IntPtr.Zero)
-        {
-            return;
-        }
-
-        UnregisterConfiguredHotkeys();
-
-        bool tvHotkeyReady = TryGetVirtualKey(_settings.TvHotkeyKey, out uint tvVirtualKey, out _);
-        bool deskHotkeyReady = TryGetVirtualKey(_settings.DeskHotkeyKey, out uint deskVirtualKey, out _);
-
-        if (!tvHotkeyReady || !deskHotkeyReady)
-        {
-            SetStatus("Hotkeys could not be registered because one or more keys are invalid.");
-            return;
-        }
-
-        uint tvModifiers = BuildModifierValue(
-            _settings.TvHotkeyCtrl,
-            _settings.TvHotkeyAlt,
-            _settings.TvHotkeyShift,
-            _settings.TvHotkeyWin
-        );
-
-        uint deskModifiers = BuildModifierValue(
-            _settings.DeskHotkeyCtrl,
-            _settings.DeskHotkeyAlt,
-            _settings.DeskHotkeyShift,
-            _settings.DeskHotkeyWin
-        );
-
-        bool tvRegistered = RegisterHotKey(
-            helper.Handle,
-            HOTKEY_ID_TV_MODE,
-            tvModifiers | MOD_NOREPEAT,
-            tvVirtualKey
-        );
-
-        bool deskRegistered = RegisterHotKey(
-            helper.Handle,
-            HOTKEY_ID_DESK_MODE,
-            deskModifiers | MOD_NOREPEAT,
-            deskVirtualKey
-        );
-
-        _hotkeysRegistered = tvRegistered || deskRegistered;
-
-        UpdateHotkeyDisplayText();
-
-        if (tvRegistered && deskRegistered)
-        {
-            SetStatus($"Ready. Hotkeys active: {FormatHotkey(_settings.TvHotkeyCtrl, _settings.TvHotkeyAlt, _settings.TvHotkeyShift, _settings.TvHotkeyWin, _settings.TvHotkeyKey)} = TV Gaming Mode, {FormatHotkey(_settings.DeskHotkeyCtrl, _settings.DeskHotkeyAlt, _settings.DeskHotkeyShift, _settings.DeskHotkeyWin, _settings.DeskHotkeyKey)} = Desk Mode.");
-        }
-        else
-        {
-            SetStatus("Ready. One or more hotkeys could not be registered. Another app may already be using the same shortcut.");
-        }
+        StartWithWindowsCheckBox.IsChecked = _settings.StartWithWindows;
     }
 
-    private void UnregisterConfiguredHotkeys()
+    private void LoadProfilesIntoUi()
     {
-        var helper = new WindowInteropHelper(this);
+        ProfilesListBox.ItemsSource = null;
+        ProfilesListBox.ItemsSource = _settings.Profiles;
 
-        if (helper.Handle == IntPtr.Zero)
+        DisplayModeProfile? selectedProfile = GetSelectedProfileFromSettings();
+
+        if (selectedProfile is not null)
+        {
+            ProfilesListBox.SelectedItem = selectedProfile;
+        }
+        else if (_settings.Profiles.Count > 0)
+        {
+            ProfilesListBox.SelectedIndex = 0;
+        }
+
+        LoadSelectedProfileIntoEditor();
+        UpdateSelectedProfileHeader();
+    }
+
+    private DisplayModeProfile? GetSelectedProfileFromSettings()
+    {
+        return _settings.Profiles.FirstOrDefault(profile =>
+            string.Equals(profile.Id, _settings.SelectedProfileId, StringComparison.OrdinalIgnoreCase)
+        );
+    }
+
+    private DisplayModeProfile? GetSelectedProfile()
+    {
+        return ProfilesListBox.SelectedItem as DisplayModeProfile;
+    }
+
+    private void ProfilesListBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (_isLoadingProfile)
         {
             return;
         }
 
-        UnregisterHotKey(helper.Handle, HOTKEY_ID_TV_MODE);
-        UnregisterHotKey(helper.Handle, HOTKEY_ID_DESK_MODE);
+        DisplayModeProfile? selectedProfile = GetSelectedProfile();
 
-        _hotkeysRegistered = false;
+        if (selectedProfile is null)
+        {
+            return;
+        }
+
+        _settings.SelectedProfileId = selectedProfile.Id;
+
+        LoadSelectedProfileIntoEditor();
+        UpdateSelectedProfileHeader();
     }
 
-    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    private void LoadSelectedProfileIntoEditor()
     {
-        if (msg == WM_HOTKEY)
-        {
-            int hotkeyId = wParam.ToInt32();
+        DisplayModeProfile? profile = GetSelectedProfile();
 
-            if (hotkeyId == HOTKEY_ID_TV_MODE)
+        if (profile is null)
+        {
+            return;
+        }
+
+        _isLoadingProfile = true;
+
+        SelectedProfileNameBox.Text = profile.Name;
+
+        LauncherPathBox.Text = profile.LauncherPath;
+        LauncherProcessNameBox.Text = profile.LauncherProcessName;
+
+        HotkeyCtrlCheckBox.IsChecked = profile.HotkeyCtrl;
+        HotkeyAltCheckBox.IsChecked = profile.HotkeyAlt;
+        HotkeyShiftCheckBox.IsChecked = profile.HotkeyShift;
+        HotkeyWinCheckBox.IsChecked = profile.HotkeyWin;
+        HotkeyKeyBox.Text = profile.HotkeyKey;
+
+        LaunchAppAfterSwitchCheckBox.IsChecked = profile.LaunchAppAfterSwitch;
+        CloseLauncherAfterSwitchCheckBox.IsChecked = profile.CloseLauncherAfterSwitch;
+        StartWithWindowsCheckBox.IsChecked = _settings.StartWithWindows;
+
+        BuildProfileDisplaySelections(profile);
+
+        _isLoadingProfile = false;
+    }
+
+   private void UpdateSelectedProfileHeader()
+{
+    DisplayModeProfile? profile = GetSelectedProfile();
+
+    if (profile is null)
+    {
+        SwitchSelectedProfileButtonTitle.Text = "Switch Selected Profile";
+        SwitchSelectedProfileButtonSubtitle.Text = "Applies the selected display layout";
+        SelectedProfileHotkeyDisplayText.Text = "";
+        ProfileDisplaySetupEditingText.Text = "Currently editing: No profile selected";
+        return;
+    }
+
+    SwitchSelectedProfileButtonTitle.Text = "Switch to " + profile.Name;
+    SwitchSelectedProfileButtonSubtitle.Text = "Applies this display profile";
+
+    SelectedProfileHotkeyDisplayText.Text = string.IsNullOrWhiteSpace(profile.HotkeyKey)
+        ? "No hotkey set"
+        : FormatHotkey(profile.HotkeyCtrl, profile.HotkeyAlt, profile.HotkeyShift, profile.HotkeyWin, profile.HotkeyKey);
+
+    ProfileDisplaySetupEditingText.Text = "Currently editing: " + profile.Name;
+}
+
+    private void BuildProfileDisplaySelections(DisplayModeProfile profile)
+    {
+        _profileDisplaySelections = _detectedDisplays
+            .Select(display => new ProfileDisplaySelection
             {
-                handled = true;
-                _ = SwitchToTvModeFromHotkeyAsync();
-            }
-            else if (hotkeyId == HOTKEY_ID_DESK_MODE)
+                DisplayName = display.DisplayName,
+                MonitorName = display.MonitorName,
+                ResolutionText = display.ResolutionText,
+                Enabled = profile.EnabledDisplays.Contains(display.DisplayName),
+                Primary = string.Equals(profile.PrimaryDisplayName, display.DisplayName, StringComparison.OrdinalIgnoreCase)
+            })
+            .ToList();
+
+        ProfileDisplaysItemsControl.ItemsSource = null;
+        ProfileDisplaysItemsControl.ItemsSource = _profileDisplaySelections;
+    }
+
+    private void LoadDetectedDisplays()
+    {
+        try
+        {
+            var allDisplays = _displayDiscoveryService.GetDisplays().ToList();
+
+            _detectedDisplays = allDisplays
+                .Where(display => display.IsActive)
+                .ToList();
+
+            DisplaysDataGrid.ItemsSource = null;
+            DisplaysDataGrid.ItemsSource = _detectedDisplays;
+
+            DisplayModeProfile? profile = GetSelectedProfile();
+
+            if (profile is not null)
             {
-                handled = true;
-                _ = SwitchToDeskModeFromHotkeyAsync();
+                BuildProfileDisplaySelections(profile);
             }
-        }
 
-        return IntPtr.Zero;
+            SetStatus($"Detected {_detectedDisplays.Count} active display(s).");
+        }
+        catch (Exception ex)
+        {
+            SetStatus("Display discovery error: " + ex.Message);
+        }
     }
 
-    private async Task SwitchToTvModeFromHotkeyAsync()
+    private void AddProfileButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_isSwitching)
+        var profile = new DisplayModeProfile
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Name = "New Profile",
+            LauncherPath = "",
+            LauncherProcessName = "",
+            LaunchAppAfterSwitch = false,
+            CloseLauncherAfterSwitch = false,
+            HotkeyCtrl = true,
+            HotkeyAlt = true,
+            HotkeyKey = ""
+        };
+
+        if (_detectedDisplays.Count > 0)
+        {
+            string firstDisplay = _detectedDisplays[0].DisplayName;
+
+            profile.PrimaryDisplayName = firstDisplay;
+            profile.EnabledDisplays = new List<string> { firstDisplay };
+            profile.DisabledDisplays = _detectedDisplays
+                .Skip(1)
+                .Select(display => display.DisplayName)
+                .ToList();
+        }
+
+        _settings.Profiles.Add(profile);
+        _settings.SelectedProfileId = profile.Id;
+        _settings.Save();
+
+        LoadProfilesIntoUi();
+        RegisterConfiguredHotkeys();
+        RefreshTrayMenu();
+
+        SetStatus("New profile added.");
+    }
+
+    private void DeleteProfileButton_Click(object sender, RoutedEventArgs e)
+    {
+        DisplayModeProfile? profile = GetSelectedProfile();
+
+        if (profile is null)
         {
             return;
         }
 
-        await RunWithUiLockAsync("Hotkey: Switching to TV Gaming Mode...", async () =>
+        if (_settings.Profiles.Count <= 1)
         {
-            await _displayModeService.SwitchToTvGamingModeAsync();
-            LoadDetectedDisplays();
-            SetStatus("TV Gaming Mode activated by hotkey.");
-        });
-    }
+            System.Windows.MessageBox.Show(
+                "DisplayDeck needs at least one profile.",
+                "Cannot Delete Profile",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information
+            );
 
-    private async Task SwitchToDeskModeFromHotkeyAsync()
-    {
-        if (_isSwitching)
+            return;
+        }
+
+        MessageBoxResult result = System.Windows.MessageBox.Show(
+            $"Delete profile '{profile.Name}'?",
+            "Delete Profile",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question
+        );
+
+        if (result != MessageBoxResult.Yes)
         {
             return;
         }
 
-        await RunWithUiLockAsync("Hotkey: Switching to Desk Mode...", async () =>
-        {
-            await _displayModeService.SwitchToDeskModeAsync();
-            LoadDetectedDisplays();
-            SetStatus("Desk Mode activated by hotkey.");
-        });
+        _settings.Profiles.Remove(profile);
+        _settings.SelectedProfileId = _settings.Profiles[0].Id;
+        _settings.Save();
+
+        LoadProfilesIntoUi();
+        RegisterConfiguredHotkeys();
+        RefreshTrayMenu();
+
+        SetStatus("Profile deleted.");
     }
 
-    private async void TvModeButton_Click(object sender, RoutedEventArgs e)
+    private async void SwitchSelectedProfileButton_Click(object sender, RoutedEventArgs e)
     {
-        await RunWithUiLockAsync("Switching to TV Gaming Mode...", async () =>
+        DisplayModeProfile? profile = GetSelectedProfile();
+
+        if (profile is null)
         {
-            await _displayModeService.SwitchToTvGamingModeAsync();
-            LoadDetectedDisplays();
-            SetStatus("TV Gaming Mode activated.");
-        });
+            return;
+        }
+
+        SaveSelectedProfileFromUi(showSavedStatus: false);
+
+        await SwitchToProfileAsync(profile);
     }
 
-    private async void DeskModeButton_Click(object sender, RoutedEventArgs e)
+    private async Task SwitchToProfileByIdAsync(string profileId)
     {
-        await RunWithUiLockAsync("Switching to Desk Mode...", async () =>
+        DisplayModeProfile? profile = _settings.Profiles.FirstOrDefault(item =>
+            string.Equals(item.Id, profileId, StringComparison.OrdinalIgnoreCase)
+        );
+
+        if (profile is null)
         {
-            await _displayModeService.SwitchToDeskModeAsync();
+            return;
+        }
+
+        await SwitchToProfileAsync(profile);
+    }
+
+    private async Task SwitchToProfileAsync(DisplayModeProfile profile)
+    {
+        await RunWithUiLockAsync("Switching to " + profile.Name + "...", async () =>
+        {
+            await _displayModeService.SwitchToProfileAsync(profile);
             LoadDetectedDisplays();
-            SetStatus("Desk Mode activated.");
+            SetStatus(profile.Name + " activated.");
         });
     }
 
@@ -336,7 +476,7 @@ public partial class MainWindow : Window
 
     private void SaveSettingsButton_Click(object sender, RoutedEventArgs e)
     {
-        SaveSettingsFromUi();
+        SaveSelectedProfileFromUi(showSavedStatus: true);
     }
 
     private void BrowseLauncher_Click(object sender, RoutedEventArgs e)
@@ -365,74 +505,15 @@ public partial class MainWindow : Window
         return dialog.ShowDialog() == true ? dialog.FileName : null;
     }
 
-    private void LoadDetectedDisplays()
+    private bool SaveSelectedProfileFromUi(bool showSavedStatus)
     {
-        try
+        DisplayModeProfile? profile = GetSelectedProfile();
+
+        if (profile is null)
         {
-            var allDisplays = _displayDiscoveryService.GetDisplays().ToList();
-
-            _detectedDisplays = allDisplays
-                .Where(display => display.IsActive)
-                .ToList();
-
-            DisplaysDataGrid.ItemsSource = null;
-            DisplaysDataGrid.ItemsSource = _detectedDisplays;
-
-            BuildModeSelections();
-
-            SetStatus($"Detected {_detectedDisplays.Count} active display(s).");
+            return false;
         }
-        catch (Exception ex)
-        {
-            SetStatus("Display discovery error: " + ex.Message);
-        }
-    }
 
-    private void BuildModeSelections()
-    {
-        _modeSelections = _detectedDisplays
-            .Select(display => new ModeDisplaySelection
-            {
-                DisplayName = display.DisplayName,
-                MonitorName = display.MonitorName,
-                ResolutionText = display.ResolutionText,
-
-                DeskEnabled = _settings.DeskMode.EnabledDisplays.Contains(display.DisplayName),
-                DeskPrimary = string.Equals(_settings.DeskMode.PrimaryDisplayName, display.DisplayName, StringComparison.OrdinalIgnoreCase),
-
-                TvEnabled = _settings.TvGamingMode.EnabledDisplays.Contains(display.DisplayName),
-                TvPrimary = string.Equals(_settings.TvGamingMode.PrimaryDisplayName, display.DisplayName, StringComparison.OrdinalIgnoreCase)
-            })
-            .ToList();
-
-        ModeBuilderDataGrid.ItemsSource = null;
-        ModeBuilderDataGrid.ItemsSource = _modeSelections;
-    }
-
-    private void LoadSettingsIntoUi()
-    {
-        LauncherPathBox.Text = _settings.LauncherPath;
-        LauncherProcessNameBox.Text = _settings.LauncherProcessName;
-
-        LaunchAppCheckBox.IsChecked = _settings.LaunchAppOnTvMode;
-        CloseAppCheckBox.IsChecked = _settings.CloseAppOnDeskMode;
-        StartWithWindowsCheckBox.IsChecked = _settings.StartWithWindows;
-
-        TvHotkeyCtrlCheckBox.IsChecked = _settings.TvHotkeyCtrl;
-        TvHotkeyAltCheckBox.IsChecked = _settings.TvHotkeyAlt;
-        TvHotkeyShiftCheckBox.IsChecked = _settings.TvHotkeyShift;
-        TvHotkeyWinCheckBox.IsChecked = _settings.TvHotkeyWin;
-        TvHotkeyKeyBox.Text = _settings.TvHotkeyKey;
-
-        DeskHotkeyCtrlCheckBox.IsChecked = _settings.DeskHotkeyCtrl;
-        DeskHotkeyAltCheckBox.IsChecked = _settings.DeskHotkeyAlt;
-        DeskHotkeyShiftCheckBox.IsChecked = _settings.DeskHotkeyShift;
-        DeskHotkeyWinCheckBox.IsChecked = _settings.DeskHotkeyWin;
-        DeskHotkeyKeyBox.Text = _settings.DeskHotkeyKey;
-    }
-
-    private void SaveSettingsFromUi()
-    {
         if (!TryReadHotkeyEditorValues(out string errorMessage))
         {
             System.Windows.MessageBox.Show(
@@ -442,17 +523,45 @@ public partial class MainWindow : Window
                 MessageBoxImage.Warning
             );
 
-            return;
+            return false;
         }
 
-        _settings.LauncherPath = LauncherPathBox.Text.Trim();
-        _settings.LauncherProcessName = LauncherProcessNameBox.Text.Trim();
+        if (!TryApplyDisplaySelections(profile, out errorMessage))
+        {
+            System.Windows.MessageBox.Show(
+                errorMessage,
+                "Invalid Display Profile",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning
+            );
 
-        _settings.LaunchAppOnTvMode = LaunchAppCheckBox.IsChecked == true;
-        _settings.CloseAppOnDeskMode = CloseAppCheckBox.IsChecked == true;
+            return false;
+        }
+
+        string profileName = SelectedProfileNameBox.Text.Trim();
+
+        if (string.IsNullOrWhiteSpace(profileName))
+        {
+            profileName = "Display Profile";
+        }
+
+        profile.Name = profileName;
+        profile.LauncherPath = LauncherPathBox.Text.Trim();
+        profile.LauncherProcessName = LauncherProcessNameBox.Text.Trim();
+        profile.LaunchAppAfterSwitch = LaunchAppAfterSwitchCheckBox.IsChecked == true;
+        profile.CloseLauncherAfterSwitch = CloseLauncherAfterSwitchCheckBox.IsChecked == true;
+
+        profile.HotkeyCtrl = HotkeyCtrlCheckBox.IsChecked == true;
+        profile.HotkeyAlt = HotkeyAltCheckBox.IsChecked == true;
+        profile.HotkeyShift = HotkeyShiftCheckBox.IsChecked == true;
+        profile.HotkeyWin = HotkeyWinCheckBox.IsChecked == true;
+        profile.HotkeyKey = HotkeyKeyBox.Text.Trim();
+
+        profile.EnsureDefaults(profile.Name);
+
+        _settings.SelectedProfileId = profile.Id;
         _settings.StartWithWindows = StartWithWindowsCheckBox.IsChecked == true;
 
-        ApplyModeBuilderToSettings();
         ApplyStartupSetting();
 
         _settings.Save();
@@ -460,72 +569,131 @@ public partial class MainWindow : Window
         _displayModeService = new DisplayModeService(_settings);
 
         RegisterConfiguredHotkeys();
-        UpdateHotkeyDisplayText();
+        RefreshTrayMenu();
 
-        SetStatus("Settings saved. Hotkeys updated.");
+        ProfilesListBox.Items.Refresh();
+        UpdateSelectedProfileHeader();
+
+        if (showSavedStatus)
+        {
+            SetStatus("Profile saved. Hotkeys and tray menu updated.");
+        }
+
+        return true;
+    }
+
+    private bool TryApplyDisplaySelections(DisplayModeProfile profile, out string errorMessage)
+    {
+        errorMessage = "";
+
+        List<string> enabled = _profileDisplaySelections
+            .Where(selection => selection.Enabled)
+            .Select(selection => selection.DisplayName)
+            .ToList();
+
+        List<string> disabled = _profileDisplaySelections
+            .Where(selection => !selection.Enabled)
+            .Select(selection => selection.DisplayName)
+            .ToList();
+
+        string primary = _profileDisplaySelections
+            .FirstOrDefault(selection => selection.Primary)
+            ?.DisplayName ?? "";
+
+        if (enabled.Count == 0)
+        {
+            errorMessage = "This profile must have at least one enabled display.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(primary))
+        {
+            primary = enabled[0];
+        }
+
+        if (!enabled.Contains(primary, StringComparer.OrdinalIgnoreCase))
+        {
+            errorMessage = "The primary display must also be enabled.";
+            return false;
+        }
+
+        profile.EnabledDisplays = enabled;
+        profile.DisabledDisplays = disabled;
+        profile.PrimaryDisplayName = primary;
+
+        return true;
     }
 
     private bool TryReadHotkeyEditorValues(out string errorMessage)
     {
         errorMessage = "";
 
-        bool tvCtrl = TvHotkeyCtrlCheckBox.IsChecked == true;
-        bool tvAlt = TvHotkeyAltCheckBox.IsChecked == true;
-        bool tvShift = TvHotkeyShiftCheckBox.IsChecked == true;
-        bool tvWin = TvHotkeyWinCheckBox.IsChecked == true;
+        bool ctrl = HotkeyCtrlCheckBox.IsChecked == true;
+        bool alt = HotkeyAltCheckBox.IsChecked == true;
+        bool shift = HotkeyShiftCheckBox.IsChecked == true;
+        bool win = HotkeyWinCheckBox.IsChecked == true;
 
-        bool deskCtrl = DeskHotkeyCtrlCheckBox.IsChecked == true;
-        bool deskAlt = DeskHotkeyAltCheckBox.IsChecked == true;
-        bool deskShift = DeskHotkeyShiftCheckBox.IsChecked == true;
-        bool deskWin = DeskHotkeyWinCheckBox.IsChecked == true;
+        string keyRaw = HotkeyKeyBox.Text.Trim();
 
-        string tvKeyRaw = TvHotkeyKeyBox.Text.Trim();
-        string deskKeyRaw = DeskHotkeyKeyBox.Text.Trim();
-
-        if (!tvCtrl && !tvAlt && !tvShift && !tvWin)
+        if (string.IsNullOrWhiteSpace(keyRaw))
         {
-            errorMessage = "TV Gaming Mode hotkey must include at least one modifier such as Ctrl, Alt, Shift, or Win.";
+            return true;
+        }
+
+        if (!ctrl && !alt && !shift && !win)
+        {
+            errorMessage = "A hotkey must include at least one modifier such as Ctrl, Alt, Shift, or Win.";
             return false;
         }
 
-        if (!deskCtrl && !deskAlt && !deskShift && !deskWin)
+        if (!TryGetVirtualKey(keyRaw, out _, out string normalizedKey))
         {
-            errorMessage = "Desk Mode hotkey must include at least one modifier such as Ctrl, Alt, Shift, or Win.";
+            errorMessage = "Hotkey key is invalid. Try a letter, number, F1-F12, Enter, Space, Escape, Home, End, PageUp, or PageDown.";
             return false;
         }
 
-        if (!TryGetVirtualKey(tvKeyRaw, out uint tvVirtualKey, out string tvKeyNormalized))
+        uint currentModifiers = BuildModifierValue(ctrl, alt, shift, win);
+
+        DisplayModeProfile? selectedProfile = GetSelectedProfile();
+
+        foreach (DisplayModeProfile profile in _settings.Profiles)
         {
-            errorMessage = "TV Gaming Mode hotkey key is invalid. Try a letter, number, F1-F12, Enter, Space, Escape, Home, End, PageUp, or PageDown.";
-            return false;
+            if (selectedProfile is not null &&
+                string.Equals(profile.Id, selectedProfile.Id, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(profile.HotkeyKey))
+            {
+                continue;
+            }
+
+            if (!TryGetVirtualKey(profile.HotkeyKey, out uint profileVirtualKey, out _))
+            {
+                continue;
+            }
+
+            if (!TryGetVirtualKey(normalizedKey, out uint currentVirtualKey, out _))
+            {
+                continue;
+            }
+
+            uint profileModifiers = BuildModifierValue(
+                profile.HotkeyCtrl,
+                profile.HotkeyAlt,
+                profile.HotkeyShift,
+                profile.HotkeyWin
+            );
+
+            if (profileModifiers == currentModifiers && profileVirtualKey == currentVirtualKey)
+            {
+                errorMessage = $"The hotkey {FormatHotkey(ctrl, alt, shift, win, normalizedKey)} is already used by '{profile.Name}'.";
+                return false;
+            }
         }
 
-        if (!TryGetVirtualKey(deskKeyRaw, out uint deskVirtualKey, out string deskKeyNormalized))
-        {
-            errorMessage = "Desk Mode hotkey key is invalid. Try a letter, number, F1-F12, Enter, Space, Escape, Home, End, PageUp, or PageDown.";
-            return false;
-        }
-
-        uint tvModifiers = BuildModifierValue(tvCtrl, tvAlt, tvShift, tvWin);
-        uint deskModifiers = BuildModifierValue(deskCtrl, deskAlt, deskShift, deskWin);
-
-        if (tvModifiers == deskModifiers && tvVirtualKey == deskVirtualKey)
-        {
-            errorMessage = "TV Gaming Mode and Desk Mode cannot use the same hotkey.";
-            return false;
-        }
-
-        _settings.TvHotkeyCtrl = tvCtrl;
-        _settings.TvHotkeyAlt = tvAlt;
-        _settings.TvHotkeyShift = tvShift;
-        _settings.TvHotkeyWin = tvWin;
-        _settings.TvHotkeyKey = tvKeyNormalized;
-
-        _settings.DeskHotkeyCtrl = deskCtrl;
-        _settings.DeskHotkeyAlt = deskAlt;
-        _settings.DeskHotkeyShift = deskShift;
-        _settings.DeskHotkeyWin = deskWin;
-        _settings.DeskHotkeyKey = deskKeyNormalized;
+        HotkeyKeyBox.Text = normalizedKey;
 
         return true;
     }
@@ -574,64 +742,101 @@ public partial class MainWindow : Window
         }
     }
 
-    private void ApplyModeBuilderToSettings()
+    private void RegisterConfiguredHotkeys()
     {
-        var deskEnabled = _modeSelections
-            .Where(x => x.DeskEnabled)
-            .Select(x => x.DisplayName)
-            .ToList();
+        var helper = new WindowInteropHelper(this);
 
-        var deskDisabled = _modeSelections
-            .Where(x => !x.DeskEnabled)
-            .Select(x => x.DisplayName)
-            .ToList();
-
-        var tvEnabled = _modeSelections
-            .Where(x => x.TvEnabled)
-            .Select(x => x.DisplayName)
-            .ToList();
-
-        var tvDisabled = _modeSelections
-            .Where(x => !x.TvEnabled)
-            .Select(x => x.DisplayName)
-            .ToList();
-
-        string deskPrimary = _modeSelections.FirstOrDefault(x => x.DeskPrimary)?.DisplayName ?? "";
-        string tvPrimary = _modeSelections.FirstOrDefault(x => x.TvPrimary)?.DisplayName ?? "";
-
-        if (string.IsNullOrWhiteSpace(deskPrimary) && deskEnabled.Count > 0)
+        if (helper.Handle == IntPtr.Zero)
         {
-            deskPrimary = deskEnabled[0];
+            return;
         }
 
-        if (string.IsNullOrWhiteSpace(tvPrimary) && tvEnabled.Count > 0)
+        UnregisterConfiguredHotkeys();
+
+        int hotkeyId = HOTKEY_ID_BASE;
+        int registeredCount = 0;
+
+        foreach (DisplayModeProfile profile in _settings.Profiles)
         {
-            tvPrimary = tvEnabled[0];
+            if (string.IsNullOrWhiteSpace(profile.HotkeyKey))
+            {
+                continue;
+            }
+
+            if (!TryGetVirtualKey(profile.HotkeyKey, out uint virtualKey, out _))
+            {
+                continue;
+            }
+
+            uint modifiers = BuildModifierValue(
+                profile.HotkeyCtrl,
+                profile.HotkeyAlt,
+                profile.HotkeyShift,
+                profile.HotkeyWin
+            );
+
+            if (modifiers == 0)
+            {
+                continue;
+            }
+
+            bool registered = RegisterHotKey(
+                helper.Handle,
+                hotkeyId,
+                modifiers | MOD_NOREPEAT,
+                virtualKey
+            );
+
+            if (registered)
+            {
+                _hotkeyProfileMap[hotkeyId] = profile.Id;
+                registeredCount++;
+            }
+
+            hotkeyId++;
         }
 
-        _settings.DeskMode = new DisplayModeProfile
+        if (registeredCount > 0)
         {
-            Name = "Desk Mode",
-            PrimaryDisplayName = deskPrimary,
-            EnabledDisplays = deskEnabled,
-            DisabledDisplays = deskDisabled
-        };
-
-        _settings.TvGamingMode = new DisplayModeProfile
+            SetStatus($"Ready. {registeredCount} profile hotkey(s) active.");
+        }
+        else
         {
-            Name = "TV Gaming Mode",
-            PrimaryDisplayName = tvPrimary,
-            EnabledDisplays = tvEnabled,
-            DisabledDisplays = tvDisabled
-        };
+            SetStatus("Ready. No profile hotkeys are active.");
+        }
+    }
 
-        _settings.MainDisplayName = deskPrimary;
-        _settings.TvDisplayName = tvPrimary;
+    private void UnregisterConfiguredHotkeys()
+    {
+        var helper = new WindowInteropHelper(this);
 
-        string? secondary = deskEnabled
-            .FirstOrDefault(x => !string.Equals(x, deskPrimary, StringComparison.OrdinalIgnoreCase));
+        if (helper.Handle == IntPtr.Zero)
+        {
+            return;
+        }
 
-        _settings.SecondaryDisplayName = secondary ?? "";
+        foreach (int hotkeyId in _hotkeyProfileMap.Keys.ToList())
+        {
+            UnregisterHotKey(helper.Handle, hotkeyId);
+        }
+
+        _hotkeyProfileMap.Clear();
+    }
+
+    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg == WM_HOTKEY)
+        {
+            int hotkeyId = wParam.ToInt32();
+
+            if (_hotkeyProfileMap.TryGetValue(hotkeyId, out string? profileId))
+            {
+                handled = true;
+                _ = SwitchToProfileByIdAsync(profileId);
+            }
+        }
+
+        return IntPtr.Zero;
     }
 
     private async Task RunWithUiLockAsync(string startingStatus, Func<Task> action)
@@ -669,8 +874,7 @@ public partial class MainWindow : Window
 
     private void SetButtonsEnabled(bool enabled)
     {
-        TvModeButton.IsEnabled = enabled;
-        DeskModeButton.IsEnabled = enabled;
+        SwitchSelectedProfileButton.IsEnabled = enabled;
     }
 
     private void SetStatus(string message)
@@ -678,27 +882,13 @@ public partial class MainWindow : Window
         StatusTextBlock.Text = message;
     }
 
-    private void UpdateHotkeyDisplayText()
-    {
-        TvHotkeyDisplayText.Text = FormatHotkey(
-            _settings.TvHotkeyCtrl,
-            _settings.TvHotkeyAlt,
-            _settings.TvHotkeyShift,
-            _settings.TvHotkeyWin,
-            _settings.TvHotkeyKey
-        );
-
-        DeskHotkeyDisplayText.Text = FormatHotkey(
-            _settings.DeskHotkeyCtrl,
-            _settings.DeskHotkeyAlt,
-            _settings.DeskHotkeyShift,
-            _settings.DeskHotkeyWin,
-            _settings.DeskHotkeyKey
-        );
-    }
-
     private static string FormatHotkey(bool ctrl, bool alt, bool shift, bool win, string key)
     {
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            return "No hotkey set";
+        }
+
         var parts = new List<string>();
 
         if (ctrl)
