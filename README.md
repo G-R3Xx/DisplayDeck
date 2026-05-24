@@ -1,8 +1,10 @@
 # DisplayDeck
 
-DisplayDeck is a Windows desktop utility for switching between a normal desk monitor setup and a TV gaming setup.
+DisplayDeck is a Windows desktop utility for creating and switching between custom display profiles.
 
-It is designed for people who keep multiple monitors connected to their PC and also want to use a TV in another room for couch gaming, streaming, or full-screen launcher use.
+It is designed for people who use multiple monitors, TVs, projectors, racing displays, or other screens connected to one PC and want a quick way to switch between different display layouts.
+
+Common examples include desk work, TV gaming, sim racing, presentation setups, streaming layouts, or single-monitor focus modes.
 
 ## Screenshot
 
@@ -11,23 +13,73 @@ It is designed for people who keep multiple monitors connected to their PC and a
 DisplayDeck can:
 
 - Detect active displays connected to Windows
-- Save separate display layouts for Desk Mode and TV Gaming Mode
-- Switch between those modes using large buttons
-- Switch using global hotkeys
-- Launch an optional app when entering TV Gaming Mode
-- Close the launcher app when returning to Desk Mode
+- Create multiple custom display profiles
+- Save which displays are enabled or disabled for each profile
+- Set one primary display per profile
+- Show friendly display names on profile cards
+- Switch profiles using a large button
+- Switch profiles from the system tray
+- Switch profiles using editable global hotkeys
+- Launch an optional app after switching to a profile
+- Close an optional launcher app after switching to a profile
 - Minimize to the system tray
 - Start with Windows
 - Run without MultiMonitorTool or external display-switching tools
 
 ---
 
-## Current hotkeys
+## Display profiles
 
-| Mode | Hotkey |
+DisplayDeck is profile-based.
+
+Each profile can store:
+
+- Profile name
+- Enabled displays
+- Disabled displays
+- Primary display
+- Custom hotkey
+- Optional launcher app
+- Optional launcher process name
+- Whether to launch the app after switching
+- Whether to close the launcher after switching
+
+Example profiles might include:
+
+| Profile | Use |
 |---|---|
-| TV Gaming Mode | `Ctrl + Alt + G` |
+| Desk Mode | Main monitor and secondary monitor enabled |
+| TV Gaming Mode | TV enabled as the primary display |
+| All Displays | Main monitor, secondary monitor, and TV enabled |
+| Sim Racing Mode | Racing display or cockpit screen enabled |
+| Presentation Mode | Projector or TV enabled for presenting |
+| Focus Mode | Only one main monitor enabled |
+
+---
+
+## Hotkeys
+
+Each profile can have its own editable hotkey.
+
+For example:
+
+| Profile | Example hotkey |
+|---|---|
 | Desk Mode | `Ctrl + Alt + D` |
+| TV Gaming Mode | `Ctrl + Alt + T` |
+| All Displays | `Ctrl + Alt + A` |
+| Sim Racing Mode | `Ctrl + Alt + S` |
+
+Hotkeys can use:
+
+- Ctrl
+- Alt
+- Shift
+- Win
+- Letters
+- Numbers
+- Function keys
+- Common keys such as Enter, Space, Escape, Home, End, PageUp, and PageDown
 
 DisplayDeck must be running for hotkeys to work. It can run minimized in the system tray.
 
@@ -35,17 +87,20 @@ DisplayDeck must be running for hotkeys to work. It can run minimized in the sys
 
 ## Example use case
 
-A common setup might be:
+A common setup might include several saved profiles:
 
-| Display | Use |
-|---|---|
-| Main monitor | Desk Mode primary display |
-| Secondary monitor | Desk Mode extra display |
-| TV | TV Gaming Mode primary display |
+| Profile | Displays enabled | Primary display |
+|---|---|---|
+| Desk Mode | Main monitor and secondary monitor | Main monitor |
+| TV Gaming Mode | TV only | TV |
+| All Displays | Main monitor, secondary monitor, and TV | Main monitor |
+| Sim Racing Mode | Racing display or cockpit screen | Racing display |
 
-In Desk Mode, DisplayDeck can enable the desk monitors and disable the TV.
+Each profile can have its own hotkey and optional launcher actions.
 
-In TV Gaming Mode, DisplayDeck can enable the TV, make it the primary display, disable the desk monitors, and launch a full-screen launcher such as Winhanced, Playnite, Steam Big Picture, or another app.
+For example, a TV Gaming Mode profile can enable the TV, make it the primary display, disable the desk monitors, and launch a full-screen launcher such as Winhanced, Playnite, Steam Big Picture, or another app.
+
+A Desk Mode profile can return to your normal monitors and close the launcher app.
 
 ---
 
@@ -55,13 +110,13 @@ For initial setup, all displays you want to configure should be powered on, conn
 
 DisplayDeck only shows active displays during setup so inactive virtual or phantom displays stay hidden.
 
-If the TV is physically disconnected, powered off, asleep, or not visible to Windows, Windows may reject the display switch. Turn the TV on, make sure it is on the correct HDMI input, refresh displays, then try again.
+If a TV is physically disconnected, powered off, asleep, or not visible to Windows, Windows may reject the display switch. Turn the TV on, make sure it is on the correct HDMI input, refresh displays, then try again.
 
 ---
 
 ## Display switching delay
 
-When switching modes, Windows may take a few seconds to apply the new monitor layout.
+When switching profiles, Windows may take a few seconds to apply the new monitor layout.
 
 During switching, screens may:
 
@@ -75,17 +130,42 @@ This is normal.
 
 ---
 
-## System requirements
+## System tray behavior
 
-- Windows 10 or Windows 11
-- x64 Windows PC
-- .NET 8 runtime if running a framework-dependent build
-- No separate runtime required if using the self-contained release build
+DisplayDeck is designed to keep running quietly in the background.
+
+- Minimize button: hides DisplayDeck to the system tray
+- Close button: hides DisplayDeck to the system tray
+- Tray icon double-click: reopens DisplayDeck
+- Tray icon right-click: shows options for opening, switching profiles, or exiting
+- Exit DisplayDeck from the tray menu: fully closes the app
 
 ---
 
-## Download
+## Launcher app support
 
-Download the latest compiled version from the [latest DisplayDeck release](https://github.com/G-R3Xx/DisplayDeck/releases/latest).
+Each profile can optionally launch or close an app after switching.
 
-The recommended download is **DisplayDeck.exe**.
+Examples:
+
+- Winhanced
+- Playnite Fullscreen
+- Steam Big Picture
+- Moonlight
+- Sunshine helper tools
+- Any other `.exe`
+
+This means you can have one profile that launches a gaming launcher, and another profile that closes it when returning to your normal desktop setup.
+
+Some apps may resist normal close commands, especially if they are running as administrator. If the launcher does not close correctly, try running DisplayDeck with the same permission level as the launcher.
+
+---
+
+## Start with Windows
+
+DisplayDeck includes a Start with Windows option.
+
+When enabled, DisplayDeck adds itself to the current user's Windows startup registry location:
+
+```text
+HKCU\Software\Microsoft\Windows\CurrentVersion\Run
