@@ -18,10 +18,8 @@ public partial class MainWindow : Window
 {
     private const string StartupRegistryKeyPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
     private const string StartupAppName = "DisplayDeck";
-
     private const int HOTKEY_ID_BASE = 9100;
     private const int WM_HOTKEY = 0x0312;
-
     private const uint MOD_ALT = 0x0001;
     private const uint MOD_CONTROL = 0x0002;
     private const uint MOD_SHIFT = 0x0004;
@@ -31,17 +29,13 @@ public partial class MainWindow : Window
     private AppSettings _settings;
     private DisplayModeService _displayModeService;
     private readonly NativeDisplayDiscoveryService _displayDiscoveryService = new();
-
     private List<DisplayInfo> _detectedDisplays = new();
     private List<ProfileDisplaySelection> _profileDisplaySelections = new();
     private List<DisplayAliasEditorItem> _displayAliasEditorItems = new();
-
     private HwndSource? _hwndSource;
     private Forms.NotifyIcon? _trayIcon;
     private Drawing.Icon? _appTrayIcon;
-
     private readonly Dictionary<int, string> _hotkeyProfileMap = new();
-
     private bool _isSwitching;
     private bool _isExitRequested;
     private bool _hasShownTrayMessage;
@@ -50,17 +44,13 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-
         _settings = AppSettings.Load();
         _displayModeService = new DisplayModeService(_settings);
-
         SourceInitialized += MainWindow_SourceInitialized;
         StateChanged += MainWindow_StateChanged;
         Closing += MainWindow_Closing;
         Closed += MainWindow_Closed;
-
         CreateTrayIcon();
-
         LoadSettingsIntoUi();
         LoadDetectedDisplays();
         LoadProfilesIntoUi();
@@ -71,14 +61,12 @@ public partial class MainWindow : Window
         var helper = new WindowInteropHelper(this);
         _hwndSource = HwndSource.FromHwnd(helper.Handle);
         _hwndSource?.AddHook(WndProc);
-
         RegisterConfiguredHotkeys();
     }
 
     private void CreateTrayIcon()
     {
         _appTrayIcon = LoadDisplayDeckIcon();
-
         _trayIcon = new Forms.NotifyIcon
         {
             Text = "DisplayDeck",
@@ -86,45 +74,31 @@ public partial class MainWindow : Window
             Visible = true,
             ContextMenuStrip = BuildTrayMenu()
         };
-
-        _trayIcon.DoubleClick += (_, _) =>
-        {
-            ShowMainWindow();
-        };
+        _trayIcon.DoubleClick += (_, _) => ShowMainWindow();
     }
 
     private static Drawing.Icon LoadDisplayDeckIcon()
     {
         try
         {
-            var resourceInfo = System.Windows.Application.GetResourceStream(
-                new Uri("pack://application:,,,/Assets/DisplayDeck.ico", UriKind.Absolute)
-            );
-
+            var resourceInfo = System.Windows.Application.GetResourceStream(new Uri("pack://application:,,,/Assets/DisplayDeck.ico", UriKind.Absolute));
             if (resourceInfo?.Stream is not null)
             {
                 using var memoryStream = new MemoryStream();
                 resourceInfo.Stream.CopyTo(memoryStream);
                 memoryStream.Position = 0;
-
                 return new Drawing.Icon(memoryStream);
             }
         }
-        catch
-        {
-            // Fallback below.
-        }
-
+        catch { }
         return Drawing.SystemIcons.Application;
     }
 
     private Forms.ContextMenuStrip BuildTrayMenu()
     {
         var menu = new Forms.ContextMenuStrip();
-
         var openItem = new Forms.ToolStripMenuItem("Open DisplayDeck");
         openItem.Click += (_, _) => ShowMainWindow();
-
         menu.Items.Add(openItem);
         menu.Items.Add(new Forms.ToolStripSeparator());
 
@@ -137,44 +111,30 @@ public partial class MainWindow : Window
         }
 
         menu.Items.Add(new Forms.ToolStripSeparator());
-
         var exitItem = new Forms.ToolStripMenuItem("Exit DisplayDeck");
         exitItem.Click += (_, _) =>
         {
             _isExitRequested = true;
             Close();
         };
-
         menu.Items.Add(exitItem);
-
         return menu;
     }
 
     private void RefreshTrayMenu()
     {
-        if (_trayIcon is null)
-        {
-            return;
-        }
-
+        if (_trayIcon is null) return;
         _trayIcon.ContextMenuStrip = BuildTrayMenu();
     }
 
     private void MainWindow_StateChanged(object? sender, EventArgs e)
     {
-        if (WindowState == WindowState.Minimized)
-        {
-            HideToTray();
-        }
+        if (WindowState == WindowState.Minimized) HideToTray();
     }
 
     private void MainWindow_Closing(object? sender, CancelEventArgs e)
     {
-        if (_isExitRequested)
-        {
-            return;
-        }
-
+        if (_isExitRequested) return;
         e.Cancel = true;
         HideToTray();
     }
@@ -182,16 +142,9 @@ public partial class MainWindow : Window
     private void HideToTray()
     {
         Hide();
-
         if (_trayIcon is not null && !_hasShownTrayMessage)
         {
-            _trayIcon.ShowBalloonTip(
-                2500,
-                "DisplayDeck is still running",
-                "Use the tray icon or hotkeys to switch profiles. Right-click the tray icon to exit.",
-                Forms.ToolTipIcon.Info
-            );
-
+            _trayIcon.ShowBalloonTip(2500, "DisplayDeck is still running", "Use the tray icon or hotkeys to switch profiles. Right-click the tray icon to exit.", Forms.ToolTipIcon.Info);
             _hasShownTrayMessage = true;
         }
     }
@@ -199,12 +152,7 @@ public partial class MainWindow : Window
     private void ShowMainWindow()
     {
         Show();
-
-        if (WindowState == WindowState.Minimized)
-        {
-            WindowState = WindowState.Normal;
-        }
-
+        if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
         Activate();
         Focus();
     }
@@ -212,21 +160,15 @@ public partial class MainWindow : Window
     private void MainWindow_Closed(object? sender, EventArgs e)
     {
         UnregisterConfiguredHotkeys();
-
         _hwndSource?.RemoveHook(WndProc);
-
         if (_trayIcon is not null)
         {
             _trayIcon.Visible = false;
             _trayIcon.Dispose();
             _trayIcon = null;
         }
-
-        if (_appTrayIcon is not null)
-        {
-            _appTrayIcon.Dispose();
-            _appTrayIcon = null;
-        }
+        _appTrayIcon?.Dispose();
+        _appTrayIcon = null;
     }
 
     private void LoadSettingsIntoUi()
@@ -234,28 +176,18 @@ public partial class MainWindow : Window
         StartWithWindowsCheckBox.IsChecked = _settings.StartWithWindows;
     }
 
-    private static string GetDisplayKey(DisplayInfo display)
-    {
-        return display.IdentityKey;
-    }
+    private static string GetDisplayKey(DisplayInfo display) => display.IdentityKey;
 
     private static bool DisplayMatchesKey(DisplayInfo display, string displayKey)
     {
-        if (string.IsNullOrWhiteSpace(displayKey))
-        {
-            return false;
-        }
-
+        if (string.IsNullOrWhiteSpace(displayKey)) return false;
         return string.Equals(display.IdentityKey, displayKey, StringComparison.OrdinalIgnoreCase) ||
                string.Equals(display.StableDisplayId, displayKey, StringComparison.OrdinalIgnoreCase) ||
                string.Equals(display.MonitorHardwareCode, displayKey, StringComparison.OrdinalIgnoreCase) ||
                string.Equals(display.DisplayName, displayKey, StringComparison.OrdinalIgnoreCase);
     }
 
-    private DisplayInfo? FindDetectedDisplayByKey(string displayKey)
-    {
-        return _detectedDisplays.FirstOrDefault(display => DisplayMatchesKey(display, displayKey));
-    }
+    private DisplayInfo? FindDetectedDisplayByKey(string displayKey) => _detectedDisplays.FirstOrDefault(display => DisplayMatchesKey(display, displayKey));
 
     private void NormalizeDisplayLabels()
     {
@@ -264,37 +196,25 @@ public partial class MainWindow : Window
         foreach (DisplayInfo display in _detectedDisplays)
         {
             string displayKey = GetDisplayKey(display);
+            if (string.IsNullOrWhiteSpace(displayKey)) continue;
 
-            if (string.IsNullOrWhiteSpace(displayKey))
-            {
-                continue;
-            }
-
-            if (_settings.DisplayAliases.TryGetValue(displayKey, out string? savedAlias) &&
-                !string.IsNullOrWhiteSpace(savedAlias))
+            if (_settings.DisplayAliases.TryGetValue(displayKey, out string? savedAlias) && !string.IsNullOrWhiteSpace(savedAlias))
             {
                 display.FriendlyName = savedAlias;
                 continue;
             }
 
             string detectedName = display.BestDetectedName;
-
             if (!string.IsNullOrWhiteSpace(detectedName))
             {
                 display.FriendlyName = detectedName;
-                _settings.DisplayAliases[displayKey] = detectedName;
                 continue;
             }
 
-            string fallback = string.IsNullOrWhiteSpace(display.DisplayNumber)
+            display.FriendlyName = string.IsNullOrWhiteSpace(display.DisplayNumber)
                 ? display.DisplayName
                 : $"{display.DisplayNumber} — {display.ResolutionDisplayText}";
-
-            display.FriendlyName = fallback;
-            _settings.DisplayAliases[displayKey] = fallback;
         }
-
-        _settings.Save();
     }
 
     private void SaveDisplayDetailsFromActiveDisplays()
@@ -305,18 +225,10 @@ public partial class MainWindow : Window
         foreach (DisplayInfo display in _detectedDisplays)
         {
             string displayKey = GetDisplayKey(display);
-
-            if (string.IsNullOrWhiteSpace(displayKey))
-            {
-                continue;
-            }
+            if (string.IsNullOrWhiteSpace(displayKey)) continue;
 
             string label = display.DisplayLabel;
-
-            if (string.IsNullOrWhiteSpace(label))
-            {
-                label = display.DisplayName;
-            }
+            if (string.IsNullOrWhiteSpace(label)) label = display.DisplayName;
 
             var details = new SavedDisplayDetails
             {
@@ -342,17 +254,8 @@ public partial class MainWindow : Window
 
     private SavedDisplayDetails? GetSavedDisplayDetails(string displayKey)
     {
-        if (string.IsNullOrWhiteSpace(displayKey))
-        {
-            return null;
-        }
-
-        if (_settings.DisplayDetails is not null &&
-            _settings.DisplayDetails.TryGetValue(displayKey, out SavedDisplayDetails? details))
-        {
-            return details;
-        }
-
+        if (string.IsNullOrWhiteSpace(displayKey)) return null;
+        if (_settings.DisplayDetails is not null && _settings.DisplayDetails.TryGetValue(displayKey, out SavedDisplayDetails? details)) return details;
         return null;
     }
 
@@ -360,41 +263,27 @@ public partial class MainWindow : Window
     {
         _settings.DisplayAliases ??= new Dictionary<string, string>();
 
-        _displayAliasEditorItems = _detectedDisplays
-            .Select(display =>
+        _displayAliasEditorItems = _detectedDisplays.Select(display =>
+        {
+            string displayKey = GetDisplayKey(display);
+            string detectedName = display.BestDetectedName;
+            if (string.IsNullOrWhiteSpace(detectedName)) detectedName = display.AutoFallbackLabel;
+
+            string alias = "";
+            if (_settings.DisplayAliases.TryGetValue(displayKey, out string? savedAlias)) alias = savedAlias;
+            if (string.IsNullOrWhiteSpace(alias)) alias = display.DisplayLabel;
+
+            return new DisplayAliasEditorItem
             {
-                string displayKey = GetDisplayKey(display);
-                string detectedName = display.BestDetectedName;
-
-                if (string.IsNullOrWhiteSpace(detectedName))
-                {
-                    detectedName = display.AutoFallbackLabel;
-                }
-
-                string alias = "";
-
-                if (_settings.DisplayAliases.TryGetValue(displayKey, out string? savedAlias))
-                {
-                    alias = savedAlias;
-                }
-
-                if (string.IsNullOrWhiteSpace(alias))
-                {
-                    alias = display.DisplayLabel;
-                }
-
-                return new DisplayAliasEditorItem
-                {
-                    DisplayKey = displayKey,
-                    DisplayName = display.DisplayName,
-                    StableDisplayId = display.StableDisplayId,
-                    DetectedName = detectedName,
-                    ResolutionText = display.ResolutionDisplayText,
-                    PositionText = display.PositionText,
-                    Alias = alias
-                };
-            })
-            .ToList();
+                DisplayKey = displayKey,
+                DisplayName = display.DisplayName,
+                StableDisplayId = display.StableDisplayId,
+                DetectedName = detectedName,
+                ResolutionText = display.ResolutionDisplayText,
+                PositionText = display.PositionText,
+                Alias = alias
+            };
+        }).ToList();
 
         DisplayAliasesItemsControl.ItemsSource = null;
         DisplayAliasesItemsControl.ItemsSource = _displayAliasEditorItems;
@@ -406,13 +295,8 @@ public partial class MainWindow : Window
 
         foreach (DisplayAliasEditorItem item in _displayAliasEditorItems)
         {
-            if (string.IsNullOrWhiteSpace(item.DisplayKey))
-            {
-                continue;
-            }
-
+            if (string.IsNullOrWhiteSpace(item.DisplayKey)) continue;
             string alias = item.Alias.Trim();
-
             if (string.IsNullOrWhiteSpace(alias))
             {
                 DisplayInfo? display = FindDetectedDisplayByKey(item.DisplayKey);
@@ -420,180 +304,76 @@ public partial class MainWindow : Window
             }
 
             _settings.DisplayAliases[item.DisplayKey] = alias;
-
-            if (_settings.DisplayDetails is not null &&
-                _settings.DisplayDetails.TryGetValue(item.DisplayKey, out SavedDisplayDetails? details))
-            {
-                details.Label = alias;
-            }
+            if (_settings.DisplayDetails is not null && _settings.DisplayDetails.TryGetValue(item.DisplayKey, out SavedDisplayDetails? details)) details.Label = alias;
         }
 
         ApplyAliasesToDetectedDisplays();
         SaveDisplayDetailsFromActiveDisplays();
         UpdateAllProfileSavedDisplayLabelsFromAliases();
-
         _settings.Save();
-
         BuildDisplayAliasEditorItems();
-
         DisplaysDataGrid.Items.Refresh();
 
         DisplayModeProfile? profile = GetSelectedProfile();
-
-        if (profile is not null)
-        {
-            BuildProfileDisplaySelections(profile);
-        }
+        if (profile is not null) BuildProfileDisplaySelections(profile);
 
         UpdateProfileDisplayLabels();
         ProfilesListBox.Items.Refresh();
         UpdateSelectedProfileHeader();
-
         SetStatus("Display names saved.");
     }
 
     private void ResetDisplayNamesButton_Click(object sender, RoutedEventArgs e)
     {
-        MessageBoxResult result = System.Windows.MessageBox.Show(
-            "Reset display names for currently active displays back to detected/default names?",
-            "Reset Display Names",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Question
-        );
-
-        if (result != MessageBoxResult.Yes)
-        {
-            return;
-        }
+        MessageBoxResult result = System.Windows.MessageBox.Show("Reset display names for currently active displays back to detected/default names?", "Reset Display Names", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (result != MessageBoxResult.Yes) return;
 
         _settings.DisplayAliases ??= new Dictionary<string, string>();
 
         foreach (DisplayInfo display in _detectedDisplays)
         {
             string displayKey = GetDisplayKey(display);
-
-            if (string.IsNullOrWhiteSpace(displayKey))
-            {
-                continue;
-            }
-
+            if (string.IsNullOrWhiteSpace(displayKey)) continue;
             _settings.DisplayAliases.Remove(displayKey);
-
             string detectedName = display.BestDetectedName;
-
-            display.FriendlyName = !string.IsNullOrWhiteSpace(detectedName)
-                ? detectedName
-                : display.AutoFallbackLabel;
+            display.FriendlyName = !string.IsNullOrWhiteSpace(detectedName) ? detectedName : display.AutoFallbackLabel;
         }
 
-        NormalizeDisplayLabels();
         SaveDisplayDetailsFromActiveDisplays();
         UpdateAllProfileSavedDisplayLabelsFromAliases();
-
         _settings.Save();
-
         BuildDisplayAliasEditorItems();
-
         DisplaysDataGrid.Items.Refresh();
 
         DisplayModeProfile? profile = GetSelectedProfile();
-
-        if (profile is not null)
-        {
-            BuildProfileDisplaySelections(profile);
-        }
+        if (profile is not null) BuildProfileDisplaySelections(profile);
 
         UpdateProfileDisplayLabels();
         ProfilesListBox.Items.Refresh();
         UpdateSelectedProfileHeader();
-
         SetStatus("Display names reset for active displays.");
     }
 
     private void ApplyAliasesToDetectedDisplays()
     {
         _settings.DisplayAliases ??= new Dictionary<string, string>();
-
         foreach (DisplayInfo display in _detectedDisplays)
         {
             string displayKey = GetDisplayKey(display);
-
-            if (string.IsNullOrWhiteSpace(displayKey))
-            {
-                continue;
-            }
-
-            if (_settings.DisplayAliases.TryGetValue(displayKey, out string? alias) &&
-                !string.IsNullOrWhiteSpace(alias))
-            {
-                display.FriendlyName = alias;
-            }
-        }
-    }
-
-    private void RefreshSavedDisplayLabelsFromActiveDisplays()
-    {
-        bool changed = false;
-
-        _settings.DisplayAliases ??= new Dictionary<string, string>();
-
-        foreach (DisplayModeProfile profile in _settings.Profiles)
-        {
-            profile.SavedDisplayLabels ??= new Dictionary<string, string>();
-
-            foreach (DisplayInfo display in _detectedDisplays)
-            {
-                string displayKey = GetDisplayKey(display);
-
-                if (string.IsNullOrWhiteSpace(displayKey))
-                {
-                    continue;
-                }
-
-                string label = display.DisplayLabel;
-
-                if (string.IsNullOrWhiteSpace(label))
-                {
-                    label = display.DisplayName;
-                }
-
-                if (!profile.SavedDisplayLabels.TryGetValue(displayKey, out string? existingProfileLabel) ||
-                    !string.Equals(existingProfileLabel, label, StringComparison.Ordinal))
-                {
-                    profile.SavedDisplayLabels[displayKey] = label;
-                    changed = true;
-                }
-
-                if (!_settings.DisplayAliases.TryGetValue(displayKey, out string? existingAlias) ||
-                    !string.Equals(existingAlias, label, StringComparison.Ordinal))
-                {
-                    _settings.DisplayAliases[displayKey] = label;
-                    changed = true;
-                }
-            }
-        }
-
-        if (changed)
-        {
-            _settings.Save();
+            if (string.IsNullOrWhiteSpace(displayKey)) continue;
+            if (_settings.DisplayAliases.TryGetValue(displayKey, out string? alias) && !string.IsNullOrWhiteSpace(alias)) display.FriendlyName = alias;
         }
     }
 
     private void UpdateAllProfileSavedDisplayLabelsFromAliases()
     {
         _settings.DisplayAliases ??= new Dictionary<string, string>();
-
         foreach (DisplayModeProfile profile in _settings.Profiles)
         {
             profile.SavedDisplayLabels ??= new Dictionary<string, string>();
-
             foreach (KeyValuePair<string, string> alias in _settings.DisplayAliases)
             {
-                if (string.IsNullOrWhiteSpace(alias.Key) || string.IsNullOrWhiteSpace(alias.Value))
-                {
-                    continue;
-                }
-
+                if (string.IsNullOrWhiteSpace(alias.Key) || string.IsNullOrWhiteSpace(alias.Value)) continue;
                 profile.SavedDisplayLabels[alias.Key] = alias.Value;
             }
         }
@@ -604,102 +384,46 @@ public partial class MainWindow : Window
         foreach (DisplayModeProfile profile in _settings.Profiles)
         {
             profile.PrimaryDisplayLabel = GetFriendlyDisplayNameForProfile(profile, profile.PrimaryDisplayName);
-
-            if (profile.EnabledDisplays.Count == 0)
-            {
-                profile.EnabledDisplaysLabel = "None";
-            }
-            else
-            {
-                profile.EnabledDisplaysLabel = string.Join(
-                    ", ",
-                    profile.EnabledDisplays.Select(displayKey => GetFriendlyDisplayNameForProfile(profile, displayKey))
-                );
-            }
+            profile.EnabledDisplaysLabel = profile.EnabledDisplays.Count == 0
+                ? "None"
+                : string.Join(", ", profile.EnabledDisplays.Select(displayKey => GetFriendlyDisplayNameForProfile(profile, displayKey)));
         }
     }
 
     private string GetFriendlyDisplayNameForProfile(DisplayModeProfile profile, string displayKey)
     {
-        if (string.IsNullOrWhiteSpace(displayKey))
-        {
-            return "Not set";
-        }
-
-        if (_settings.DisplayAliases is not null &&
-            _settings.DisplayAliases.TryGetValue(displayKey, out string? alias) &&
-            !string.IsNullOrWhiteSpace(alias))
-        {
-            return alias;
-        }
-
+        if (string.IsNullOrWhiteSpace(displayKey)) return "Not set";
+        if (_settings.DisplayAliases is not null && _settings.DisplayAliases.TryGetValue(displayKey, out string? alias) && !string.IsNullOrWhiteSpace(alias)) return alias;
         DisplayInfo? activeDisplay = FindDetectedDisplayByKey(displayKey);
-
-        if (activeDisplay is not null)
-        {
-            return activeDisplay.DisplayLabel;
-        }
-
+        if (activeDisplay is not null) return activeDisplay.DisplayLabel;
         SavedDisplayDetails? savedDetails = GetSavedDisplayDetails(displayKey);
-
-        if (savedDetails is not null && !string.IsNullOrWhiteSpace(savedDetails.Label))
-        {
-            return savedDetails.Label;
-        }
-
+        if (savedDetails is not null && !string.IsNullOrWhiteSpace(savedDetails.Label)) return savedDetails.Label;
         return profile.GetSavedOrRawDisplayLabel(displayKey);
     }
 
     private void LoadProfilesIntoUi()
     {
         UpdateProfileDisplayLabels();
-
         ProfilesListBox.ItemsSource = null;
         ProfilesListBox.ItemsSource = _settings.Profiles;
 
         DisplayModeProfile? selectedProfile = GetSelectedProfileFromSettings();
-
-        if (selectedProfile is not null)
-        {
-            ProfilesListBox.SelectedItem = selectedProfile;
-        }
-        else if (_settings.Profiles.Count > 0)
-        {
-            ProfilesListBox.SelectedIndex = 0;
-        }
+        if (selectedProfile is not null) ProfilesListBox.SelectedItem = selectedProfile;
+        else if (_settings.Profiles.Count > 0) ProfilesListBox.SelectedIndex = 0;
 
         LoadSelectedProfileIntoEditor();
         UpdateSelectedProfileHeader();
     }
 
-    private DisplayModeProfile? GetSelectedProfileFromSettings()
-    {
-        return _settings.Profiles.FirstOrDefault(profile =>
-            string.Equals(profile.Id, _settings.SelectedProfileId, StringComparison.OrdinalIgnoreCase)
-        );
-    }
-
-    private DisplayModeProfile? GetSelectedProfile()
-    {
-        return ProfilesListBox.SelectedItem as DisplayModeProfile;
-    }
+    private DisplayModeProfile? GetSelectedProfileFromSettings() => _settings.Profiles.FirstOrDefault(profile => string.Equals(profile.Id, _settings.SelectedProfileId, StringComparison.OrdinalIgnoreCase));
+    private DisplayModeProfile? GetSelectedProfile() => ProfilesListBox.SelectedItem as DisplayModeProfile;
 
     private void ProfilesListBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
-        if (_isLoadingProfile)
-        {
-            return;
-        }
-
+        if (_isLoadingProfile) return;
         DisplayModeProfile? selectedProfile = GetSelectedProfile();
-
-        if (selectedProfile is null)
-        {
-            return;
-        }
-
+        if (selectedProfile is null) return;
         _settings.SelectedProfileId = selectedProfile.Id;
-
         LoadSelectedProfileIntoEditor();
         UpdateSelectedProfileHeader();
     }
@@ -707,38 +431,26 @@ public partial class MainWindow : Window
     private void LoadSelectedProfileIntoEditor()
     {
         DisplayModeProfile? profile = GetSelectedProfile();
-
-        if (profile is null)
-        {
-            return;
-        }
-
+        if (profile is null) return;
         _isLoadingProfile = true;
-
         SelectedProfileNameBox.Text = profile.Name;
-
         LauncherPathBox.Text = profile.LauncherPath;
         LauncherProcessNameBox.Text = profile.LauncherProcessName;
-
         HotkeyCtrlCheckBox.IsChecked = profile.HotkeyCtrl;
         HotkeyAltCheckBox.IsChecked = profile.HotkeyAlt;
         HotkeyShiftCheckBox.IsChecked = profile.HotkeyShift;
         HotkeyWinCheckBox.IsChecked = profile.HotkeyWin;
         HotkeyKeyBox.Text = profile.HotkeyKey;
-
         LaunchAppAfterSwitchCheckBox.IsChecked = profile.LaunchAppAfterSwitch;
         CloseLauncherAfterSwitchCheckBox.IsChecked = profile.CloseLauncherAfterSwitch;
         StartWithWindowsCheckBox.IsChecked = _settings.StartWithWindows;
-
         BuildProfileDisplaySelections(profile);
-
         _isLoadingProfile = false;
     }
 
     private void UpdateSelectedProfileHeader()
     {
         DisplayModeProfile? profile = GetSelectedProfile();
-
         if (profile is null)
         {
             SwitchSelectedProfileButtonTitle.Text = "Switch Selected Profile";
@@ -750,74 +462,40 @@ public partial class MainWindow : Window
 
         SwitchSelectedProfileButtonTitle.Text = "Switch to " + profile.Name;
         SwitchSelectedProfileButtonSubtitle.Text = "Applies this display profile";
-
-        SelectedProfileHotkeyDisplayText.Text = string.IsNullOrWhiteSpace(profile.HotkeyKey)
-            ? "No hotkey set"
-            : FormatHotkey(profile.HotkeyCtrl, profile.HotkeyAlt, profile.HotkeyShift, profile.HotkeyWin, profile.HotkeyKey);
-
+        SelectedProfileHotkeyDisplayText.Text = string.IsNullOrWhiteSpace(profile.HotkeyKey) ? "No hotkey set" : FormatHotkey(profile.HotkeyCtrl, profile.HotkeyAlt, profile.HotkeyShift, profile.HotkeyWin, profile.HotkeyKey);
         ProfileDisplaySetupEditingText.Text = "Currently editing: " + profile.Name;
     }
 
     private void BuildProfileDisplaySelections(DisplayModeProfile profile)
     {
         List<string> displayKeys = new();
-
-        foreach (DisplayInfo display in _detectedDisplays)
-        {
-            AddDisplayKeyIfMissing(displayKeys, GetDisplayKey(display));
-        }
-
+        foreach (DisplayInfo display in _detectedDisplays) AddDisplayKeyIfMissing(displayKeys, GetDisplayKey(display));
         AddDisplayKeyIfMissing(displayKeys, profile.PrimaryDisplayName);
+        foreach (string displayKey in profile.EnabledDisplays) AddDisplayKeyIfMissing(displayKeys, displayKey);
+        foreach (string displayKey in profile.DisabledDisplays) AddDisplayKeyIfMissing(displayKeys, displayKey);
 
-        foreach (string displayKey in profile.EnabledDisplays)
+        _profileDisplaySelections = displayKeys.Select(displayKey =>
         {
-            AddDisplayKeyIfMissing(displayKeys, displayKey);
-        }
+            DisplayInfo? activeDisplay = FindDetectedDisplayByKey(displayKey);
+            SavedDisplayDetails? savedDetails = GetSavedDisplayDetails(displayKey);
+            string label = activeDisplay is not null ? activeDisplay.DisplayLabel : GetFriendlyDisplayNameForProfile(profile, displayKey);
+            string displayName = activeDisplay is not null ? activeDisplay.DisplayName : savedDetails?.DisplayName ?? displayKey;
+            string resolutionText = activeDisplay is not null ? activeDisplay.ResolutionDisplayText : savedDetails?.ResolutionText ?? "Resolution saved when display is active";
+            string positionText = activeDisplay is not null ? activeDisplay.PositionText : savedDetails?.PositionText ?? "Not currently active";
+            string activeStateText = activeDisplay is not null ? "Currently active" : "Not currently active";
 
-        foreach (string displayKey in profile.DisabledDisplays)
-        {
-            AddDisplayKeyIfMissing(displayKeys, displayKey);
-        }
-
-        _profileDisplaySelections = displayKeys
-            .Select(displayKey =>
+            return new ProfileDisplaySelection
             {
-                DisplayInfo? activeDisplay = FindDetectedDisplayByKey(displayKey);
-                SavedDisplayDetails? savedDetails = GetSavedDisplayDetails(displayKey);
-
-                string label = activeDisplay is not null
-                    ? activeDisplay.DisplayLabel
-                    : GetFriendlyDisplayNameForProfile(profile, displayKey);
-
-                string displayName = activeDisplay is not null
-                    ? activeDisplay.DisplayName
-                    : savedDetails?.DisplayName ?? displayKey;
-
-                string resolutionText = activeDisplay is not null
-                    ? activeDisplay.ResolutionDisplayText
-                    : savedDetails?.ResolutionText ?? "Resolution saved when display is active";
-
-                string positionText = activeDisplay is not null
-                    ? activeDisplay.PositionText
-                    : savedDetails?.PositionText ?? "Not currently active";
-
-                string activeStateText = activeDisplay is not null
-                    ? "Currently active"
-                    : "Not currently active";
-
-                return new ProfileDisplaySelection
-                {
-                    DisplayKey = displayKey,
-                    DisplayName = displayName,
-                    MonitorName = label,
-                    ResolutionText = resolutionText,
-                    PositionText = positionText,
-                    ActiveStateText = activeStateText,
-                    Enabled = profile.EnabledDisplays.Contains(displayKey, StringComparer.OrdinalIgnoreCase),
-                    Primary = string.Equals(profile.PrimaryDisplayName, displayKey, StringComparison.OrdinalIgnoreCase)
-                };
-            })
-            .ToList();
+                DisplayKey = displayKey,
+                DisplayName = displayName,
+                MonitorName = label,
+                ResolutionText = resolutionText,
+                PositionText = positionText,
+                ActiveStateText = activeStateText,
+                Enabled = profile.EnabledDisplays.Contains(displayKey, StringComparer.OrdinalIgnoreCase),
+                Primary = string.Equals(profile.PrimaryDisplayName, displayKey, StringComparison.OrdinalIgnoreCase)
+            };
+        }).ToList();
 
         ProfileDisplaysItemsControl.ItemsSource = null;
         ProfileDisplaysItemsControl.ItemsSource = _profileDisplaySelections;
@@ -825,19 +503,9 @@ public partial class MainWindow : Window
 
     private static void AddDisplayKeyIfMissing(List<string> displayKeys, string displayKey)
     {
-        if (string.IsNullOrWhiteSpace(displayKey))
-        {
-            return;
-        }
-
-        bool alreadyExists = displayKeys.Any(existing =>
-            string.Equals(existing, displayKey, StringComparison.OrdinalIgnoreCase)
-        );
-
-        if (!alreadyExists)
-        {
-            displayKeys.Add(displayKey);
-        }
+        if (string.IsNullOrWhiteSpace(displayKey)) return;
+        bool alreadyExists = displayKeys.Any(existing => string.Equals(existing, displayKey, StringComparison.OrdinalIgnoreCase));
+        if (!alreadyExists) displayKeys.Add(displayKey);
     }
 
     private void LoadDetectedDisplays()
@@ -845,31 +513,19 @@ public partial class MainWindow : Window
         try
         {
             var allDisplays = _displayDiscoveryService.GetDisplays().ToList();
-
-            _detectedDisplays = allDisplays
-                .Where(display => display.IsActive)
-                .ToList();
-
+            _detectedDisplays = allDisplays.Where(display => display.IsActive).ToList();
             NormalizeDisplayLabels();
             ApplyAliasesToDetectedDisplays();
-            SaveDisplayDetailsFromActiveDisplays();
-            RefreshSavedDisplayLabelsFromActiveDisplays();
             BuildDisplayAliasEditorItems();
-
             DisplaysDataGrid.ItemsSource = null;
             DisplaysDataGrid.ItemsSource = _detectedDisplays;
 
             DisplayModeProfile? profile = GetSelectedProfile();
-
-            if (profile is not null)
-            {
-                BuildProfileDisplaySelections(profile);
-            }
+            if (profile is not null) BuildProfileDisplaySelections(profile);
 
             UpdateProfileDisplayLabels();
             ProfilesListBox.Items.Refresh();
-
-            SetStatus($"Detected {_detectedDisplays.Count} active display(s).");
+            SetStatus($"Detected {_detectedDisplays.Count} active display(s). Refresh does not overwrite saved profiles.");
         }
         catch (Exception ex)
         {
@@ -896,26 +552,15 @@ public partial class MainWindow : Window
         {
             DisplayInfo firstDisplay = _detectedDisplays[0];
             string firstDisplayKey = GetDisplayKey(firstDisplay);
-
             profile.PrimaryDisplayName = firstDisplayKey;
             profile.EnabledDisplays = new List<string> { firstDisplayKey };
-            profile.DisabledDisplays = _detectedDisplays
-                .Skip(1)
-                .Select(GetDisplayKey)
-                .Where(displayKey => !string.IsNullOrWhiteSpace(displayKey))
-                .ToList();
+            profile.DisabledDisplays = _detectedDisplays.Skip(1).Select(GetDisplayKey).Where(displayKey => !string.IsNullOrWhiteSpace(displayKey)).ToList();
 
             foreach (DisplayInfo display in _detectedDisplays)
             {
                 string displayKey = GetDisplayKey(display);
-
-                if (string.IsNullOrWhiteSpace(displayKey))
-                {
-                    continue;
-                }
-
+                if (string.IsNullOrWhiteSpace(displayKey)) continue;
                 profile.SavedDisplayLabels[displayKey] = display.DisplayLabel;
-
                 _settings.DisplayAliases ??= new Dictionary<string, string>();
                 _settings.DisplayAliases[displayKey] = display.DisplayLabel;
             }
@@ -924,110 +569,58 @@ public partial class MainWindow : Window
         _settings.Profiles.Add(profile);
         _settings.SelectedProfileId = profile.Id;
         _settings.Save();
-
         LoadProfilesIntoUi();
         RegisterConfiguredHotkeys();
         RefreshTrayMenu();
-
         SetStatus("New profile added.");
     }
 
     private void DeleteProfileButton_Click(object sender, RoutedEventArgs e)
     {
         DisplayModeProfile? profile = GetSelectedProfile();
-
-        if (profile is null)
-        {
-            return;
-        }
-
+        if (profile is null) return;
         if (_settings.Profiles.Count <= 1)
         {
-            System.Windows.MessageBox.Show(
-                "DisplayDeck needs at least one profile.",
-                "Cannot Delete Profile",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information
-            );
-
+            System.Windows.MessageBox.Show("DisplayDeck needs at least one profile.", "Cannot Delete Profile", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
-        MessageBoxResult result = System.Windows.MessageBox.Show(
-            $"Delete profile '{profile.Name}'?",
-            "Delete Profile",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Question
-        );
-
-        if (result != MessageBoxResult.Yes)
-        {
-            return;
-        }
+        MessageBoxResult result = System.Windows.MessageBox.Show($"Delete profile '{profile.Name}'?", "Delete Profile", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (result != MessageBoxResult.Yes) return;
 
         _settings.Profiles.Remove(profile);
         _settings.SelectedProfileId = _settings.Profiles[0].Id;
         _settings.Save();
-
         LoadProfilesIntoUi();
         RegisterConfiguredHotkeys();
         RefreshTrayMenu();
-
         SetStatus("Profile deleted.");
     }
 
     private void PrimaryDisplayCheckBox_Checked(object sender, RoutedEventArgs e)
     {
-        if (_isLoadingProfile)
-        {
-            return;
-        }
-
-        if (sender is not FrameworkElement element)
-        {
-            return;
-        }
-
-        if (element.DataContext is not ProfileDisplaySelection selectedDisplay)
-        {
-            return;
-        }
-
+        if (_isLoadingProfile) return;
+        if (sender is not FrameworkElement element) return;
+        if (element.DataContext is not ProfileDisplaySelection selectedDisplay) return;
         selectedDisplay.Enabled = true;
         selectedDisplay.Primary = true;
-
         foreach (ProfileDisplaySelection displaySelection in _profileDisplaySelections)
         {
-            if (!ReferenceEquals(displaySelection, selectedDisplay))
-            {
-                displaySelection.Primary = false;
-            }
+            if (!ReferenceEquals(displaySelection, selectedDisplay)) displaySelection.Primary = false;
         }
     }
 
     private async void SwitchSelectedProfileButton_Click(object sender, RoutedEventArgs e)
     {
         DisplayModeProfile? profile = GetSelectedProfile();
-
-        if (profile is null)
-        {
-            return;
-        }
-
+        if (profile is null) return;
         await SwitchToProfileAsync(profile);
     }
 
     private async Task SwitchToProfileByIdAsync(string profileId)
     {
-        DisplayModeProfile? profile = _settings.Profiles.FirstOrDefault(item =>
-            string.Equals(item.Id, profileId, StringComparison.OrdinalIgnoreCase)
-        );
-
-        if (profile is null)
-        {
-            return;
-        }
-
+        DisplayModeProfile? profile = _settings.Profiles.FirstOrDefault(item => string.Equals(item.Id, profileId, StringComparison.OrdinalIgnoreCase));
+        if (profile is null) return;
         await SwitchToProfileAsync(profile);
     }
 
@@ -1041,117 +634,66 @@ public partial class MainWindow : Window
         });
     }
 
-    private void RefreshDisplaysButton_Click(object sender, RoutedEventArgs e)
-    {
-        LoadDetectedDisplays();
-    }
-
-    private void SaveSettingsButton_Click(object sender, RoutedEventArgs e)
-    {
-        SaveSelectedProfileFromUi(showSavedStatus: true);
-    }
+    private void RefreshDisplaysButton_Click(object sender, RoutedEventArgs e) => LoadDetectedDisplays();
+    private void SaveSettingsButton_Click(object sender, RoutedEventArgs e) => SaveSelectedProfileFromUi(showSavedStatus: true);
 
     private void BrowseLauncher_Click(object sender, RoutedEventArgs e)
     {
         string? path = BrowseForFile("Executable files (*.exe)|*.exe|All files (*.*)|*.*");
-
         if (!string.IsNullOrWhiteSpace(path))
         {
             LauncherPathBox.Text = path;
-
-            if (string.IsNullOrWhiteSpace(LauncherProcessNameBox.Text))
-            {
-                LauncherProcessNameBox.Text = System.IO.Path.GetFileNameWithoutExtension(path);
-            }
+            if (string.IsNullOrWhiteSpace(LauncherProcessNameBox.Text)) LauncherProcessNameBox.Text = System.IO.Path.GetFileNameWithoutExtension(path);
         }
     }
 
     private static string? BrowseForFile(string filter)
     {
-        var dialog = new Microsoft.Win32.OpenFileDialog
-        {
-            Filter = filter,
-            CheckFileExists = true
-        };
-
+        var dialog = new Microsoft.Win32.OpenFileDialog { Filter = filter, CheckFileExists = true };
         return dialog.ShowDialog() == true ? dialog.FileName : null;
     }
 
     private bool SaveSelectedProfileFromUi(bool showSavedStatus)
     {
         DisplayModeProfile? profile = GetSelectedProfile();
-
-        if (profile is null)
-        {
-            return false;
-        }
+        if (profile is null) return false;
 
         if (!TryReadHotkeyEditorValues(out string errorMessage))
         {
-            System.Windows.MessageBox.Show(
-                errorMessage,
-                "Invalid Hotkey",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning
-            );
-
+            System.Windows.MessageBox.Show(errorMessage, "Invalid Hotkey", MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
         }
 
         if (!TryApplyDisplaySelections(profile, out errorMessage))
         {
-            System.Windows.MessageBox.Show(
-                errorMessage,
-                "Invalid Display Profile",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning
-            );
-
+            System.Windows.MessageBox.Show(errorMessage, "Invalid Display Profile", MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
         }
 
         string profileName = SelectedProfileNameBox.Text.Trim();
-
-        if (string.IsNullOrWhiteSpace(profileName))
-        {
-            profileName = "Display Profile";
-        }
-
+        if (string.IsNullOrWhiteSpace(profileName)) profileName = "Display Profile";
         profile.Name = profileName;
         profile.LauncherPath = LauncherPathBox.Text.Trim();
         profile.LauncherProcessName = LauncherProcessNameBox.Text.Trim();
         profile.LaunchAppAfterSwitch = LaunchAppAfterSwitchCheckBox.IsChecked == true;
         profile.CloseLauncherAfterSwitch = CloseLauncherAfterSwitchCheckBox.IsChecked == true;
-
         profile.HotkeyCtrl = HotkeyCtrlCheckBox.IsChecked == true;
         profile.HotkeyAlt = HotkeyAltCheckBox.IsChecked == true;
         profile.HotkeyShift = HotkeyShiftCheckBox.IsChecked == true;
         profile.HotkeyWin = HotkeyWinCheckBox.IsChecked == true;
         profile.HotkeyKey = HotkeyKeyBox.Text.Trim();
-
         profile.EnsureDefaults(profile.Name);
-
         _settings.SelectedProfileId = profile.Id;
         _settings.StartWithWindows = StartWithWindowsCheckBox.IsChecked == true;
-
         ApplyStartupSetting();
-
         _settings.Save();
-
         _displayModeService = new DisplayModeService(_settings);
-
         RegisterConfiguredHotkeys();
         RefreshTrayMenu();
-
         UpdateProfileDisplayLabels();
         ProfilesListBox.Items.Refresh();
         UpdateSelectedProfileHeader();
-
-        if (showSavedStatus)
-        {
-            SetStatus("Profile saved. Hotkeys and tray menu updated.");
-        }
-
+        if (showSavedStatus) SetStatus("Profile saved. Hotkeys and tray menu updated.");
         return true;
     }
 
@@ -1164,23 +706,13 @@ public partial class MainWindow : Window
 
         foreach (ProfileDisplaySelection selection in _profileDisplaySelections)
         {
-            if (string.IsNullOrWhiteSpace(selection.DisplayKey))
-            {
-                continue;
-            }
-
+            if (string.IsNullOrWhiteSpace(selection.DisplayKey)) continue;
             string label = selection.MonitorName;
-
-            if (string.IsNullOrWhiteSpace(label))
-            {
-                label = selection.DisplayName;
-            }
-
+            if (string.IsNullOrWhiteSpace(label)) label = selection.DisplayName;
             profile.SavedDisplayLabels[selection.DisplayKey] = label;
             _settings.DisplayAliases[selection.DisplayKey] = label;
 
             DisplayInfo? activeDisplay = FindDetectedDisplayByKey(selection.DisplayKey);
-
             if (activeDisplay is not null)
             {
                 var details = new SavedDisplayDetails
@@ -1197,7 +729,6 @@ public partial class MainWindow : Window
                     Height = activeDisplay.Height,
                     Frequency = activeDisplay.Frequency
                 };
-
                 profile.SavedDisplayDetails[selection.DisplayKey] = details;
                 _settings.DisplayDetails[selection.DisplayKey] = details;
             }
@@ -1211,22 +742,9 @@ public partial class MainWindow : Window
     private bool TryApplyDisplaySelections(DisplayModeProfile profile, out string errorMessage)
     {
         errorMessage = "";
-
-        List<string> enabled = _profileDisplaySelections
-            .Where(selection => selection.Enabled)
-            .Select(selection => selection.DisplayKey)
-            .Where(displayKey => !string.IsNullOrWhiteSpace(displayKey))
-            .ToList();
-
-        List<string> disabled = _profileDisplaySelections
-            .Where(selection => !selection.Enabled)
-            .Select(selection => selection.DisplayKey)
-            .Where(displayKey => !string.IsNullOrWhiteSpace(displayKey))
-            .ToList();
-
-        string primary = _profileDisplaySelections
-            .FirstOrDefault(selection => selection.Primary)
-            ?.DisplayKey ?? "";
+        List<string> enabled = _profileDisplaySelections.Where(selection => selection.Enabled).Select(selection => selection.DisplayKey).Where(displayKey => !string.IsNullOrWhiteSpace(displayKey)).ToList();
+        List<string> disabled = _profileDisplaySelections.Where(selection => !selection.Enabled).Select(selection => selection.DisplayKey).Where(displayKey => !string.IsNullOrWhiteSpace(displayKey)).ToList();
+        string primary = _profileDisplaySelections.FirstOrDefault(selection => selection.Primary)?.DisplayKey ?? "";
 
         if (enabled.Count == 0)
         {
@@ -1234,11 +752,7 @@ public partial class MainWindow : Window
             return false;
         }
 
-        if (string.IsNullOrWhiteSpace(primary))
-        {
-            primary = enabled[0];
-        }
-
+        if (string.IsNullOrWhiteSpace(primary)) primary = enabled[0];
         if (!enabled.Contains(primary, StringComparer.OrdinalIgnoreCase))
         {
             errorMessage = "The primary display must also be enabled.";
@@ -1248,34 +762,24 @@ public partial class MainWindow : Window
         profile.EnabledDisplays = enabled;
         profile.DisabledDisplays = disabled;
         profile.PrimaryDisplayName = primary;
-
         SaveDisplayLabelsToProfile(profile);
-
         return true;
     }
 
     private bool TryReadHotkeyEditorValues(out string errorMessage)
     {
         errorMessage = "";
-
         bool ctrl = HotkeyCtrlCheckBox.IsChecked == true;
         bool alt = HotkeyAltCheckBox.IsChecked == true;
         bool shift = HotkeyShiftCheckBox.IsChecked == true;
         bool win = HotkeyWinCheckBox.IsChecked == true;
-
         string keyRaw = HotkeyKeyBox.Text.Trim();
-
-        if (string.IsNullOrWhiteSpace(keyRaw))
-        {
-            return true;
-        }
-
+        if (string.IsNullOrWhiteSpace(keyRaw)) return true;
         if (!ctrl && !alt && !shift && !win)
         {
             errorMessage = "A hotkey must include at least one modifier such as Ctrl, Alt, Shift, or Win.";
             return false;
         }
-
         if (!TryGetVirtualKey(keyRaw, out _, out string normalizedKey))
         {
             errorMessage = "Hotkey key is invalid. Try a letter, number, F1-F12, Enter, Space, Escape, Home, End, PageUp, or PageDown.";
@@ -1283,39 +787,15 @@ public partial class MainWindow : Window
         }
 
         uint currentModifiers = BuildModifierValue(ctrl, alt, shift, win);
-
         DisplayModeProfile? selectedProfile = GetSelectedProfile();
 
         foreach (DisplayModeProfile otherProfile in _settings.Profiles)
         {
-            if (selectedProfile is not null &&
-                string.Equals(otherProfile.Id, selectedProfile.Id, StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            if (string.IsNullOrWhiteSpace(otherProfile.HotkeyKey))
-            {
-                continue;
-            }
-
-            if (!TryGetVirtualKey(otherProfile.HotkeyKey, out uint profileVirtualKey, out _))
-            {
-                continue;
-            }
-
-            if (!TryGetVirtualKey(normalizedKey, out uint currentVirtualKey, out _))
-            {
-                continue;
-            }
-
-            uint profileModifiers = BuildModifierValue(
-                otherProfile.HotkeyCtrl,
-                otherProfile.HotkeyAlt,
-                otherProfile.HotkeyShift,
-                otherProfile.HotkeyWin
-            );
-
+            if (selectedProfile is not null && string.Equals(otherProfile.Id, selectedProfile.Id, StringComparison.OrdinalIgnoreCase)) continue;
+            if (string.IsNullOrWhiteSpace(otherProfile.HotkeyKey)) continue;
+            if (!TryGetVirtualKey(otherProfile.HotkeyKey, out uint profileVirtualKey, out _)) continue;
+            if (!TryGetVirtualKey(normalizedKey, out uint currentVirtualKey, out _)) continue;
+            uint profileModifiers = BuildModifierValue(otherProfile.HotkeyCtrl, otherProfile.HotkeyAlt, otherProfile.HotkeyShift, otherProfile.HotkeyWin);
             if (profileModifiers == currentModifiers && profileVirtualKey == currentVirtualKey)
             {
                 errorMessage = $"The hotkey {FormatHotkey(ctrl, alt, shift, win, normalizedKey)} is already used by '{otherProfile.Name}'.";
@@ -1324,7 +804,6 @@ public partial class MainWindow : Window
         }
 
         HotkeyKeyBox.Text = normalizedKey;
-
         return true;
     }
 
@@ -1332,25 +811,12 @@ public partial class MainWindow : Window
     {
         try
         {
-            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
-                StartupRegistryKeyPath,
-                writable: true
-            );
-
-            if (key is null)
-            {
-                throw new InvalidOperationException("Could not open the Windows startup registry key.");
-            }
-
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(StartupRegistryKeyPath, writable: true);
+            if (key is null) throw new InvalidOperationException("Could not open the Windows startup registry key.");
             if (_settings.StartWithWindows)
             {
                 string exePath = Process.GetCurrentProcess().MainModule?.FileName ?? "";
-
-                if (string.IsNullOrWhiteSpace(exePath))
-                {
-                    throw new InvalidOperationException("Could not determine the DisplayDeck executable path.");
-                }
-
+                if (string.IsNullOrWhiteSpace(exePath)) throw new InvalidOperationException("Could not determine the DisplayDeck executable path.");
                 key.SetValue(StartupAppName, $"\"{exePath}\"");
             }
             else
@@ -1360,13 +826,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            System.Windows.MessageBox.Show(
-                "DisplayDeck could not update the Start with Windows setting.\n\n" + ex.Message,
-                "DisplayDeck Startup Setting",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning
-            );
-
+            System.Windows.MessageBox.Show("DisplayDeck could not update the Start with Windows setting.\n\n" + ex.Message, "DisplayDeck Startup Setting", MessageBoxButton.OK, MessageBoxImage.Warning);
             _settings.StartWithWindows = false;
             StartWithWindowsCheckBox.IsChecked = false;
         }
@@ -1375,81 +835,34 @@ public partial class MainWindow : Window
     private void RegisterConfiguredHotkeys()
     {
         var helper = new WindowInteropHelper(this);
-
-        if (helper.Handle == IntPtr.Zero)
-        {
-            return;
-        }
-
+        if (helper.Handle == IntPtr.Zero) return;
         UnregisterConfiguredHotkeys();
-
         int hotkeyId = HOTKEY_ID_BASE;
         int registeredCount = 0;
 
         foreach (DisplayModeProfile profile in _settings.Profiles)
         {
-            if (string.IsNullOrWhiteSpace(profile.HotkeyKey))
-            {
-                continue;
-            }
-
-            if (!TryGetVirtualKey(profile.HotkeyKey, out uint virtualKey, out _))
-            {
-                continue;
-            }
-
-            uint modifiers = BuildModifierValue(
-                profile.HotkeyCtrl,
-                profile.HotkeyAlt,
-                profile.HotkeyShift,
-                profile.HotkeyWin
-            );
-
-            if (modifiers == 0)
-            {
-                continue;
-            }
-
-            bool registered = RegisterHotKey(
-                helper.Handle,
-                hotkeyId,
-                modifiers | MOD_NOREPEAT,
-                virtualKey
-            );
-
+            if (string.IsNullOrWhiteSpace(profile.HotkeyKey)) continue;
+            if (!TryGetVirtualKey(profile.HotkeyKey, out uint virtualKey, out _)) continue;
+            uint modifiers = BuildModifierValue(profile.HotkeyCtrl, profile.HotkeyAlt, profile.HotkeyShift, profile.HotkeyWin);
+            if (modifiers == 0) continue;
+            bool registered = RegisterHotKey(helper.Handle, hotkeyId, modifiers | MOD_NOREPEAT, virtualKey);
             if (registered)
             {
                 _hotkeyProfileMap[hotkeyId] = profile.Id;
                 registeredCount++;
             }
-
             hotkeyId++;
         }
 
-        if (registeredCount > 0)
-        {
-            SetStatus($"Ready. {registeredCount} profile hotkey(s) active.");
-        }
-        else
-        {
-            SetStatus("Ready. No profile hotkeys are active.");
-        }
+        SetStatus(registeredCount > 0 ? $"Ready. {registeredCount} profile hotkey(s) active." : "Ready. No profile hotkeys are active.");
     }
 
     private void UnregisterConfiguredHotkeys()
     {
         var helper = new WindowInteropHelper(this);
-
-        if (helper.Handle == IntPtr.Zero)
-        {
-            return;
-        }
-
-        foreach (int hotkeyId in _hotkeyProfileMap.Keys.ToList())
-        {
-            UnregisterHotKey(helper.Handle, hotkeyId);
-        }
-
+        if (helper.Handle == IntPtr.Zero) return;
+        foreach (int hotkeyId in _hotkeyProfileMap.Keys.ToList()) UnregisterHotKey(helper.Handle, hotkeyId);
         _hotkeyProfileMap.Clear();
     }
 
@@ -1458,42 +871,29 @@ public partial class MainWindow : Window
         if (msg == WM_HOTKEY)
         {
             int hotkeyId = wParam.ToInt32();
-
             if (_hotkeyProfileMap.TryGetValue(hotkeyId, out string? profileId))
             {
                 handled = true;
                 _ = SwitchToProfileByIdAsync(profileId);
             }
         }
-
         return IntPtr.Zero;
     }
 
     private async Task RunWithUiLockAsync(string startingStatus, Func<Task> action)
     {
-        if (_isSwitching)
-        {
-            return;
-        }
-
+        if (_isSwitching) return;
         try
         {
             _isSwitching = true;
-
             SetStatus(startingStatus);
             SetButtonsEnabled(false);
-
             await action();
         }
         catch (Exception ex)
         {
             SetStatus("Error: " + ex.Message);
-            System.Windows.MessageBox.Show(
-                ex.Message,
-                "DisplayDeck Error",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error
-            );
+            System.Windows.MessageBox.Show(ex.Message, "DisplayDeck Error", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
@@ -1502,74 +902,28 @@ public partial class MainWindow : Window
         }
     }
 
-    private void SetButtonsEnabled(bool enabled)
-    {
-        SwitchSelectedProfileButton.IsEnabled = enabled;
-    }
-
-    private void SetStatus(string message)
-    {
-        StatusTextBlock.Text = message;
-    }
+    private void SetButtonsEnabled(bool enabled) => SwitchSelectedProfileButton.IsEnabled = enabled;
+    private void SetStatus(string message) => StatusTextBlock.Text = message;
 
     private static string FormatHotkey(bool ctrl, bool alt, bool shift, bool win, string key)
     {
-        if (string.IsNullOrWhiteSpace(key))
-        {
-            return "No hotkey set";
-        }
-
+        if (string.IsNullOrWhiteSpace(key)) return "No hotkey set";
         var parts = new List<string>();
-
-        if (ctrl)
-        {
-            parts.Add("Ctrl");
-        }
-
-        if (alt)
-        {
-            parts.Add("Alt");
-        }
-
-        if (shift)
-        {
-            parts.Add("Shift");
-        }
-
-        if (win)
-        {
-            parts.Add("Win");
-        }
-
+        if (ctrl) parts.Add("Ctrl");
+        if (alt) parts.Add("Alt");
+        if (shift) parts.Add("Shift");
+        if (win) parts.Add("Win");
         parts.Add(NormalizeKeyLabel(key));
-
         return string.Join(" + ", parts);
     }
 
     private static uint BuildModifierValue(bool ctrl, bool alt, bool shift, bool win)
     {
         uint value = 0;
-
-        if (ctrl)
-        {
-            value |= MOD_CONTROL;
-        }
-
-        if (alt)
-        {
-            value |= MOD_ALT;
-        }
-
-        if (shift)
-        {
-            value |= MOD_SHIFT;
-        }
-
-        if (win)
-        {
-            value |= MOD_WIN;
-        }
-
+        if (ctrl) value |= MOD_CONTROL;
+        if (alt) value |= MOD_ALT;
+        if (shift) value |= MOD_SHIFT;
+        if (win) value |= MOD_WIN;
         return value;
     }
 
@@ -1577,44 +931,17 @@ public partial class MainWindow : Window
     {
         virtualKey = 0;
         normalizedKey = "";
-
         string keyText = input.Trim();
-
-        if (string.IsNullOrWhiteSpace(keyText))
-        {
-            return false;
-        }
-
+        if (string.IsNullOrWhiteSpace(keyText)) return false;
         keyText = keyText.Replace(" ", "", StringComparison.OrdinalIgnoreCase);
-
-        if (keyText.Length == 1 && char.IsLetter(keyText[0]))
-        {
-            keyText = keyText.ToUpperInvariant();
-        }
-        else if (keyText.Length == 1 && char.IsDigit(keyText[0]))
-        {
-            keyText = "D" + keyText;
-        }
-        else
-        {
-            keyText = NormalizeKeyAlias(keyText);
-        }
-
-        if (!Enum.TryParse(keyText, ignoreCase: true, out Key key))
-        {
-            return false;
-        }
-
+        if (keyText.Length == 1 && char.IsLetter(keyText[0])) keyText = keyText.ToUpperInvariant();
+        else if (keyText.Length == 1 && char.IsDigit(keyText[0])) keyText = "D" + keyText;
+        else keyText = NormalizeKeyAlias(keyText);
+        if (!Enum.TryParse(keyText, ignoreCase: true, out Key key)) return false;
         int vk = KeyInterop.VirtualKeyFromKey(key);
-
-        if (vk <= 0)
-        {
-            return false;
-        }
-
+        if (vk <= 0) return false;
         virtualKey = (uint)vk;
         normalizedKey = NormalizeKeyLabel(keyText);
-
         return true;
     }
 
@@ -1643,19 +970,8 @@ public partial class MainWindow : Window
     private static string NormalizeKeyLabel(string keyText)
     {
         string value = keyText.Trim();
-
-        if (value.StartsWith("D", StringComparison.OrdinalIgnoreCase) &&
-            value.Length == 2 &&
-            char.IsDigit(value[1]))
-        {
-            return value[1].ToString();
-        }
-
-        if (string.Equals(value, "Return", StringComparison.OrdinalIgnoreCase))
-        {
-            return "Enter";
-        }
-
+        if (value.StartsWith("D", StringComparison.OrdinalIgnoreCase) && value.Length == 2 && char.IsDigit(value[1])) return value[1].ToString();
+        if (string.Equals(value, "Return", StringComparison.OrdinalIgnoreCase)) return "Enter";
         return value.ToUpperInvariant() switch
         {
             "ESCAPE" => "Escape",
